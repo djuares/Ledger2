@@ -4,9 +4,10 @@ defmodule Ledger.MixProject do
   def project do
     [
       app: :ledger,
-      version: "0.1.0",
-      elixir: "~> 1.17",
-      start_permanent: Mix.env() == :prod,
+      version: "0.0.1",
+      escript: escript_config(),
+      build_embedded: Mix.env == :prod,
+      start_permanent: Mix.env == :prod,
       deps: deps()
     ]
   end
@@ -20,10 +21,16 @@ defmodule Ledger.MixProject do
   end
 
   # Run "mix help deps" to learn about dependencies.
-  defp deps do
+defp deps do
+  [
+    {:ecto_sql, "~> 3.11"},
+    {:postgrex, "~> 0.19"},
+  ]
+end
+
+  defp escript_config do
     [
-    {:postgrex, ">= 0.0.0"},
-    {:ecto_sql, "~> 3.0"}
+      main_module: Ledger.CLI
     ]
   end
 end
