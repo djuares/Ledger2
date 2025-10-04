@@ -55,7 +55,30 @@ mix compile
 docker-compose up -d postgres
 ```
 
-2. Crea la base de datos:
+2. Crea la base de datos dev:
 ```bash
 mix ecto.create
+mix ecto.migrate
+```
+4. Crear la base de datos de test (opcional, para correr tests):
+```bash
+MIX_ENV=test mix ecto.create
+MIX_ENV=test mix ecto.migrate
+
+```
+3. Ejecutar test
+```bash
+MIX_ENV=test mix test
+```
+
+## Abrir una consola de PostgreSQL
+
+```bash
+sudo  psql -U postgres -d ledger_test -h localhost
+\dt
+```
+
+```bash
+docker exec -it ledger_postgres_1 psql -U postgres
+\l
 ```
