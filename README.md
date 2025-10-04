@@ -54,19 +54,20 @@ mix compile
 ```bash
 docker-compose up -d postgres
 ```
-
+## Base de datos dev
 2. Crea la base de datos dev:
 ```bash
 mix ecto.create
 mix ecto.migrate
 ```
-4. Crear la base de datos de test (opcional, para correr tests):
+## Base de datos test
+1. Crear la base de datos de test (opcional, para correr tests):
 ```bash
 MIX_ENV=test mix ecto.create
 MIX_ENV=test mix ecto.migrate
 
 ```
-3. Ejecutar test
+2. Ejecutar test
 ```bash
 MIX_ENV=test mix test
 ```
