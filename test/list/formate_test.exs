@@ -56,7 +56,7 @@ defmodule FormatTest do
       789;1754937004;BTC;USDT;3.0;122;555;transfer
       """
 
-      assert {:ok, _balance} = Ledger.Balance.process_content(content, "122", "0")
+      assert {:ok, _balance} = Ledger.ListBalance.process_content(content, "122", "0")
     end
 
     test "rechaza contenido con IDs duplicados" do
@@ -66,7 +66,7 @@ defmodule FormatTest do
       """
 
       assert{:error, 2} =
-               Ledger.Balance.process_content(content, "122", "0")
+               Ledger.ListBalance.process_content(content, "122", "0")
     end
 
     test "rechaza IDs duplicados no consecutivos" do
@@ -77,7 +77,7 @@ defmodule FormatTest do
       """
 
       assert {:error, 3} =
-               Ledger.Balance.process_content(content, "122", "0")
+               Ledger.ListBalance.process_content(content, "122", "0")
     end
   end
 

@@ -1,4 +1,4 @@
-defmodule Ledger.Transactions do
+defmodule Ledger.ListTransactions do
   def list(input_file, origin_account, destinate_account, output_file) do
     with {:ok, content} <- File.read(input_file),
          processed_content <- process_content(content, origin_account, destinate_account),

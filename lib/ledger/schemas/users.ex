@@ -2,8 +2,6 @@ defmodule Ledger.Users do
   use Ecto.Schema
   import Ecto.Changeset
   alias Ledger.Transaction
-  import Ecto.Query
-  alias Ledger.Repo
 
   schema "users" do
     field :username, :string
@@ -17,6 +15,7 @@ defmodule Ledger.Users do
   end
 
   # Changeset para creación
+
   def create_changeset(user, attrs) do
     user
     |> cast(attrs, [:username, :birth_date])
@@ -25,21 +24,6 @@ defmodule Ledger.Users do
     |> validate_age()
     |> put_change(:edit_date, Date.utc_today())
   end
-
-  # Devuelve true si se puede actualizar el username, false si no
-  def can_update_username?(%__MODULE__{username: current_username}, new_username) do
-    if new_username == current_username do
-      false
-    else
-      # verificamos que no exista otro usuario con el mismo nombre
-      case Repo.get_by(__MODULE__, username: new_username) do
-        nil -> true
-        _ -> false
-      end
-    end
-  end
-
-
 
   # Validar que tenga más de 18 años
   defp validate_age(changeset) do
@@ -54,8 +38,4 @@ defmodule Ledger.Users do
         end
     end
   end
-
-  # Validación para eliminar usuario: solo si no tiene transacciones
-  def delete_allowed?(%__MODULE__{transactions_origin: [], transactions_destination: []}), do: true
-  def delete_allowed?(_), do: false
 end

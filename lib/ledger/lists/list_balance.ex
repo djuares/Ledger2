@@ -1,4 +1,4 @@
-defmodule Ledger.Balance do
+defmodule Ledger.ListBalance do
 
 def list(input_file, origin_account,  money_type, output_file) do
   case File.read(input_file) do

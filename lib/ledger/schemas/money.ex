@@ -3,47 +3,33 @@ defmodule Ledger.Money do
   import Ecto.Changeset
 
   schema "money" do
-    field :transaction_id , :id, primary_key: true
     field :name, :string
-    field :price_usd, :float
-    field :created_at, :date
-    field :updated_at, :date
+    field :price, :float
 
-    # Relation with transactions (origin or destination currency)
-    has_many :origin_transactions, Ledger.Transaction, foreign_key: :origin_currency_id
-    has_many :destination_transactions, Ledger.Transaction, foreign_key: :destination_currency_id
+    has_many :transactions_as_origin, Ledger.Transaction, foreign_key: :origin_currency_id
+    has_many :transactions_as_destination, Ledger.Transaction, foreign_key: :destination_currency_id
+
+    timestamps() # inserted_at y updated_at automáticos
   end
 
-  @spec changeset(
-          {map(),
-           %{
-             optional(atom()) =>
-               atom()
-               | {:array | :assoc | :embed | :in | :map | :parameterized | :supertype | :try,
-                  any()}
-           }}
-          | %{
-              :__struct__ => atom() | %{:__changeset__ => any(), optional(any()) => any()},
-              optional(atom()) => any()
-            },
-          :invalid | %{optional(:__struct__) => none(), optional(atom() | binary()) => any()}
-        ) :: Ecto.Changeset.t()
   @doc """
-  Validations for creating/updating currencies.
+  Changeset for creating/updating a money entity.
   """
-  def changeset(currency, attrs) do
-    currency
-    |> cast(attrs, [:name, :price_usd, :created_at, :updated_at])
-    |> validate_required([:name, :price_usd, :created_at, :updated_at])
+  def changeset(money, attrs) do
+    money
+    |> cast(attrs, [:name, :price])
+    |> validate_required([:name, :price])
     |> validate_length(:name, min: 3, max: 4)
-    |> validate_format(:name, ~r/^[A-Z]+$/, message: "The name must be uppercase")
-    |> unique_constraint(:name, message: "Currency name already exists")
-    |> validate_number(:price_usd, greater_than_or_equal_to: 0, message: "Price cannot be negative")
+    |> update_change(:name, &String.upcase/1)
+    |> unique_constraint(:name)
+    |> validate_number(:price, greater_than_or_equal_to: 0)
   end
 
   @doc """
-  Checks if the currency can be deleted (must not have associated transactions).
+  Returns true if the money entity can be deleted (no transactions associated).
   """
-  def delete_allowed?(%__MODULE__{origin_transactions: [], destination_transactions: []}), do: true
-  def delete_allowed?(_), do: false
+  def delete_allowed?(money) do
+    money = Ledger.Repo.preload(money, [:transactions_as_origin, :transactions_as_destination])
+    Enum.empty?(money.transactions_as_origin) and Enum.empty?(money.transactions_as_destination)
+  end
 end
