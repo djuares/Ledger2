@@ -1,33 +1,77 @@
-defmodule TransactionsTest do
-  use ExUnit.Case
+defmodule Ledger.ListTransactionsTest do
+  use Ledger.RepoCase
+  alias Ledger.{Repo, Transaction, Users, Money, ListTransactions}
+
+  setup do
+    # Usuarios
+    user_122 = Repo.insert!(%Users{username: "User 122", birth_date: ~D[2000-01-01]})
+    user_555 = Repo.insert!(%Users{username: "User 555", birth_date: ~D[2000-01-01]})
+    user_133 = Repo.insert!(%Users{username: "User 133", birth_date: ~D[2000-01-01]})
+
+    # Monedas
+    btc  = Repo.insert!(%Money{name: "BTC",  price: 0.0})
+    usdt = Repo.insert!(%Money{name: "USDT", price: 0.0})
+
+    # Transacciones de prueba
+    Repo.insert!(%Transaction{
+      timestamp: DateTime.utc_now() |> DateTime.truncate(:second),
+      amount: 55000.0,
+      type: "transfer",
+      origin_currency_id: usdt.id,
+      destination_currency_id: btc.id,
+      origin_account_id: user_133.id,
+      destination_account_id: user_122.id
+    })
+
+    Repo.insert!(%Transaction{
+      timestamp: DateTime.utc_now() |> DateTime.truncate(:second),
+      amount: 1.0,
+      type: "transfer",
+      origin_currency_id: btc.id,
+      destination_currency_id: usdt.id,
+      origin_account_id: user_122.id,
+      destination_account_id: user_555.id
+    })
 
 
-  test "transacciones procesa contenido csv correctamente" do
-    assert Ledger.ListTransactions.list("data/input/test.csv", "0", "0","data/output/default_output.csv") == {
-              :ok,
-              "1;1754937014;USDT;BTC;55000;133;122;transfer\n2;1754937024;BTC;USDT;1;122;555;transfer\n3;1754937034;BTC;ETH;2;555;122;transfer\n4;1754937054;BTC;BTC;0.1;555;122;transfer\n5;1754937044;BTC;USDT;0.1;122;;swap\n6;1754937074;ARS;;70000;122;;alta_cuenta\n7;1754937094;ARS;ETH;70000;122;555;transfer"
-            }
-  end
-  test "transacciones procesa origin_account correctamente" do
-    assert Ledger.ListTransactions.list("data/input/test.csv", "122", "0", "data/output/default_output.csv") == {
-              :ok,
-              "2;1754937024;BTC;USDT;1;122;555;transfer\n5;1754937044;BTC;USDT;0.1;122;;swap\n6;1754937074;ARS;;70000;122;;alta_cuenta\n7;1754937094;ARS;ETH;70000;122;555;transfer"
-            }
-  end
-  test "transacciones procesa destine_account correctamente" do
-    assert Ledger.ListTransactions.list("data/input/test.csv", "0", "122", "data/output/default_output.csv") == {
-              :ok,
-              "1;1754937014;USDT;BTC;55000;133;122;transfer\n3;1754937034;BTC;ETH;2;555;122;transfer\n4;1754937054;BTC;BTC;0.1;555;122;transfer"}
+    {:ok, %{user_122: user_122, user_555: user_555, user_133: user_133}}
   end
 
-  test "transacciones procesa origin_account and destine_account correctamente" do
-    assert Ledger.ListTransactions.list("data/input/test.csv", "122", "555", "data/output/default_output.csv") == {
-              :ok,
-              "2;1754937024;BTC;USDT;1;122;555;transfer\n7;1754937094;ARS;ETH;70000;122;555;transfer"}
+  test "devuelve todas las transacciones cuando no hay filtros", %{user_122: user_122, user_555: user_555, user_133: user_133} do
+    {:ok, transactions_csv} = ListTransactions.list("0", "0")
+
+    # Verificamos que aparezcan los montos de ambas transacciones
+      assert String.contains?(transactions_csv, "5.5e4")
+      assert String.contains?(transactions_csv, "1.0")
+
+    # Verificamos que aparezcan los IDs de los usuarios
+    assert String.contains?(transactions_csv, "#{user_122.id}")
+    assert String.contains?(transactions_csv, "#{user_555.id}")
+    assert String.contains?(transactions_csv, "#{user_133.id}")
   end
 
-  test "Transaction lista por cuenta coorectamente sin movimientos" do
-    assert Ledger.ListTransactions.list("data/input/test.csv","999", "0","data/output/default_output.csv" ) ==  {:ok, ""}
+  test "filtra correctamente por origin_account", %{user_122: user_122, user_555: user_555, user_133: user_133} do
+    {:ok, transactions_csv} = ListTransactions.list("#{user_122.id}", "0")
+
+    # Debe contener la transacción donde user_122 es origen
+    assert transactions_csv =~ "#{user_122.id};#{user_555.id}"
+
+    # No debe contener la transacción donde user_133 es origen
+    refute transactions_csv =~ "#{user_133.id};#{user_122.id}"
   end
 
+  test "filtra correctamente por destination_account", %{user_122: user_122, user_555: user_555, user_133: user_133} do
+    {:ok, transactions_csv} = ListTransactions.list("0", "#{user_122.id}")
+
+    # Debe contener la transacción donde user_122 es destino
+    assert transactions_csv =~ "#{user_133.id};#{user_122.id}"
+
+    # No debe contener la transacción donde user_122 no es destino
+    refute transactions_csv =~ "#{user_122.id};#{user_555.id}"
+  end
+
+  test "devuelve error cuando no hay movimientos" do
+    {:error, msg} = ListTransactions.list("999", "0")
+    assert msg == "No se encontraron transacciones para los filtros dados."
+  end
 end

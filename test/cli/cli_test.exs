@@ -5,7 +5,6 @@ defmodule CliTest do
   use Ledger.RepoCase
   import ExUnit.CaptureIO
 
-  alias Ledger.UserOperations
   alias Ledger.Users
 
   describe "commands to list" do
@@ -14,14 +13,15 @@ defmodule CliTest do
       assert parse_args(["--help", "anything"]) == :help
     end
     test "transaction default" do
-      assert parse_args(["transaction"]) == {"transaction","data/input/trans.csv", "0", "0", "data/output/default_output.csv" }
+      assert parse_args(["transaction"]) == {"transaction", "0", "0" }
     end
-      test "transaction with arguments c1 and files" do
-      assert parse_args(["transaction", "-t=input_file", "-c1=312", "-o=output_file"]) == {"transaction", "input_file", "312", "0", "output_file"}
+      test "transaction with arguments c1 " do
+      assert parse_args(["transaction", "-c1=312"]) == {"transaction", "312", "0"}
     end
-    test "transaction with arguments c1, c2 and files" do
-      assert parse_args(["transaction", "-t=input_file", "-c1=312", "-c2=133", "-o=output_file"]) == {"transaction", "input_file", "312", "133", "output_file"}
+    test "transaction with arguments c1, c2 " do
+        assert parse_args(["transaction", "-c1=312", "-c2=133"]) == {"transaction", "312", "133"}
     end
+
     test "balance with arguments" do
       assert parse_args(["balance","-c1=312", "-m=money_type"]) == {"balance", "data/input/trans.csv", "312", "money_type", "data/output/default_output.csv"}
     end

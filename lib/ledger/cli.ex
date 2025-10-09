@@ -53,12 +53,10 @@ defmodule Ledger.CLI do
   end
 
   def args_to_internal_representation({["transaction"], opts}) do
-    input_file = opts[:t] || @default[:input_file]
     origin_account = opts[:c1] || @default[:origin_account]
     destinate_account = opts[:c2] || @default[:destinate_account]
-    output_file = opts[:o] || @default[:output_file]
 
-    {"transaction", input_file, origin_account,destinate_account, output_file}
+    {"transaction", origin_account,destinate_account}
   end
   def args_to_internal_representation({["balance"], opts}) do
     if is_nil(opts[:c1]) do
@@ -205,8 +203,8 @@ defmodule Ledger.CLI do
     System.halt(0)
   end
 
-  def process({"transaction", input_file, origin_account, destinate_account, output_file}) do
-    Ledger.ListTransactions.list(input_file, origin_account, destinate_account, output_file)
+  def process({"transaction", origin_account, destinate_account}) do
+    Ledger.ListTransactions.list(origin_account, destinate_account)
     |> decode_response()
     |> IO.puts()
   end
