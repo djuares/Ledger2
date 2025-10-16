@@ -11,8 +11,7 @@ defmodule Ledger.Repo.Migrations.CreateUsers do
       # just to simplify some examples
       timestamps null: true
     end
-
-    create index(:users, :username)
-  end
+    create unique_index(:users, [:username])
+end
 
   end

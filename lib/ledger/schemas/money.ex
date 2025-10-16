@@ -16,20 +16,26 @@ defmodule Ledger.Money do
   Changeset for creating/updating a money entity.
   """
   def changeset(money, attrs) do
-    money
-    |> cast(attrs, [:name, :price])
-    |> validate_required([:name, :price])
-    |> validate_length(:name, min: 3, max: 4)
-    |> update_change(:name, &String.upcase/1)
-    |> unique_constraint(:name)
-    |> validate_number(:price, greater_than_or_equal_to: 0)
-  end
+  money
+  |> cast(attrs, [:name, :price])
+  |> validate_required([:name, :price], message: "dato incompleto")
+  |> update_change(:name, &String.upcase/1)
+  |> unique_constraint(:name, message: "Ya existe una moneda con ese nombre")
+  |> validate_number(:price, greater_than_or_equal_to: 0, message: "El precio debe ser mayor o igual a 0")
+  |> validate_name_length()
+end
 
-  @doc """
-  Returns true if the money entity can be deleted (no transactions associated).
-  """
-  def delete_allowed?(money) do
-    money = Ledger.Repo.preload(money, [:transactions_as_origin, :transactions_as_destination])
-    Enum.empty?(money.transactions_as_origin) and Enum.empty?(money.transactions_as_destination)
+  defp validate_name_length(changeset) do
+  case get_change(changeset, :name) do
+    nil ->
+      changeset
+    name ->
+      if String.length(name) < 3 or String.length(name) > 4 do
+        add_error(changeset, :name, "insertar una longitud valida")
+      else
+        changeset
+      end
   end
+end
+
 end

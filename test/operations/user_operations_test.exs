@@ -42,8 +42,7 @@ defmodule Ledger.UserOperationsTest do
     end
   end
 
-  """
-  PRIMERO HAY QUE MIGRAR LA TABLA DE TRANSACCIONES
+
   describe "delete_user/1" do
     setup do
       {:ok, user} =
@@ -58,7 +57,7 @@ defmodule Ledger.UserOperationsTest do
       assert Repo.get(Users, user.id) == nil
     end
   end
-"""
+
 
   describe "view_user/1" do
     setup do

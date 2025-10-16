@@ -6,4 +6,5 @@ config :ledger, Ledger.Repo,
   password: "postgres",
   database: "ledger_test",
   hostname: "localhost",
-  port: 5432
+  port: 5432,
+  log: false

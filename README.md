@@ -3,6 +3,11 @@
 # Genera el ejecutable
 $ mix escript.build
 ```
+# Base de datos con Docker
+```bash
+#1. Levanta el servicio de base de datos:
+docker-compose up -d postgres
+```
 
 # Ejecución del Programa
 ```bash
@@ -28,7 +33,8 @@ $ ./ledger --help
     ```bash
     $ ./ledger balance -t=<archivo.csv> -c1=<account> -o=<archivo.csv> -m=<money_type>
     ```
-    # Ejecutar tests
+
+# Ejecutar tests
     ```bash
     $ mix test 
     ```
@@ -37,19 +43,7 @@ $ ./ledger --help
     $ mix test --cover
     ```
 
-# Iniciando la Aplicación
-```bash
-mix deps.get
-```
-```bash
-mix compile
-```
-
-# Base de datos con Docker
-1. Levanta el servicio de base de datos:
-```bash
-docker-compose up -d postgres
-```
+#ME PARECE QUE NO VA (REVISAR)
 ## Base de datos dev
     2. Crea la base de datos dev:
     ```bash
@@ -68,13 +62,23 @@ docker-compose up -d postgres
     MIX_ENV=test mix test
     ```
 
-## Abrir una consola de PostgreSQL
+## Abrir una consola de PostgreSQL y listar tablas
 ```bash
-sudo  psql -U postgres -d ledger -h localhost
-\dt
+sudo  psql -U postgres -d ledger -h localhost  
+\dt                                             #listar tablas
+SELECT * FROM money;                            #ver respectiva tabla
+SELECT * FROM users;
+SELECT * FROM transactions;
+
 ```
+## Abrir docker y ver bases de datos
 ```bash
 docker exec -it ledger_postgres_1 psql -U postgres
-\l
+\l                                              #listar bases de datos
 ```
- SELECT * FROM table
+## Poner datos iniciales
+
+priv/repo/seeds.exs
+```bash
+priv/repo/seeds.exs
+```

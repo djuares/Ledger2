@@ -1,50 +1,47 @@
 defmodule Ledger.Conversion do
+  alias Ledger.{Repo, Money}
 
-def convert(money1, money2, amount) do
-    currencies = load_currencies()
+  # Convierte un monto de money1 a money2 usando la base de datos
+  def convert(money1, money2, amount) do
     money1_up = String.upcase(money1)
     money2_up = String.upcase(money2)
 
-    if Map.has_key?(currencies, money1_up) and Map.has_key?(currencies, money2_up) do
-      rate1 = currencies[money1_up]
-      rate2 = currencies[money2_up]
-
+    with {:ok, rate1} <- get_usd_rate(money1_up),
+         {:ok, rate2} <- get_usd_rate(money2_up) do
       intermediate = amount * rate1
-      result = (intermediate / rate2)
+      result = intermediate / rate2
       final_result = Float.round(result, 6)
-
       {:ok, final_result}
     else
-      {:error, "Una o ambas monedas no son válidas"}
+      {:error, msg} -> {:error, msg}
     end
   end
 
-def load_currencies() do
-  case File.read("data/input/money.csv") do
-    {:ok, content} ->
-      currencies_map = content
-        |> String.split("\n", trim: true)
-        |> Enum.map(&String.split(&1, ";"))
-        |> Enum.reduce(%{}, fn [currency, rate], acc ->
-          {rate_float, _} = Float.parse(rate)
-          Map.put(acc, String.upcase(currency), rate_float)
-        end)
-      currencies_map
-  end
-end
-def convert_all_balances(balance_map, money_type) do
-  total = Enum.reduce(balance_map, 0.0, fn {currency, amount}, acc ->
-    if currency == money_type do
-      acc + amount
-    else
-      case convert(currency, money_type, amount) do
-        {:ok, converted_amount} -> acc + converted_amount
-        {:error, _} -> acc
-      end
+  # Obtiene la cotización en USD desde la base de datos
+  defp get_usd_rate(currency_name) do
+    case Repo.get_by(Money, name: currency_name) do
+      nil -> {:error, "Moneda #{currency_name} no encontrada"}
+      %Money{price: rate} -> {:ok, rate}
     end
-  end)
+  end
 
-  {:ok, %{money_type => total}}  # ← Devuelve {:ok, map}
-end
+  # Convierte todos los balances a un tipo de moneda específico
+  def convert_all_balances(balance_map, money_type) do
+    money_type_up = String.upcase(money_type)
 
+    total =
+      Enum.reduce(balance_map, 0.0, fn {currency, amount}, acc ->
+        currency_up = String.upcase(currency)
+        if currency_up == money_type_up do
+          acc + amount
+        else
+          case convert(currency_up, money_type_up, amount) do
+            {:ok, converted_amount} -> acc + converted_amount
+            {:error, _} -> acc
+          end
+        end
+      end)
+
+    {:ok, %{money_type_up => total}}
+  end
 end

@@ -1,92 +1,95 @@
 defmodule Ledger.UserOperations do
-  alias Ledger.{Repo}
-  alias Ledger.Users
+  alias Ledger.{Repo, Users}
 
-  # Create user
+def create_user(username, birthdate) do
+  if is_nil(birthdate) or birthdate == "" do
+    {:error, crear_usuario: "Debes ingresar la fecha de nacimiento (-b=YYYY-MM-DD)"}
+  else
+    case Date.from_iso8601(birthdate) do
+      {:ok, date} ->
+        %Users{}
+        |> Users.changeset(%{username: username, birth_date: date})
+        |> Repo.insert()
+        |> case do
+          {:ok, user} ->
+            {:ok, crear_usuario: "Usuario creado correctamente con ID #{user.id}"}
 
-  def create_user(username, birthdate) do
-    birthdate = Date.from_iso8601!(birthdate)
+          {:error, changeset} ->
+            errors =
+              changeset
+              |> Ecto.Changeset.traverse_errors(fn {msg, _opts} -> msg end)
+              |> Enum.flat_map(fn {_field, messages} -> messages end)
+              |> Enum.join("; ")
 
-    %Users{}
-    |> Users.create_changeset(%{
-      username: username,
-      birth_date: birthdate
-    })
-    |> Repo.insert()
-    |> case do
-      {:ok, user} ->
-        {:ok, "User created successfully with ID #{user.id}"}
-
-      {:error, changeset} ->
-        {:error, changeset}
+            {:error, crear_usuario: errors}
+        end
+      {:error, _reason} ->
+        {:error, crear_usuario: "Formato de fecha inválido (YYYY-MM-DD)"}
     end
   end
-
-
-
-  # Validate if username can be updated
-  def can_update_username?(%Users{username: current_username}, new_username) do
-    if new_username == current_username do
-      false
-    else
-      case Repo.get_by(Users, username: new_username) do
-        nil -> true
-        _ -> false
-      end
-    end
-  end
-
-  # Edit user
+end
   def edit_user(id, new_name) do
     case Repo.get(Users, id) do
       nil ->
-        IO.puts("⚠️ User with ID #{id} not found.")
+        {:error, editar_usuario: "Id de usuario #{id} no encontrado"}
 
       user ->
-        if can_update_username?(user, new_name) do
+        if user.username == new_name do
+          {:error, editar_usuario: "El nuevo nombre es igual al actual"}
+        else
           user
-          |> Users.create_changeset(%{username: new_name})
+          |> Users.changeset(%{username: new_name})
           |> Repo.update()
           |> case do
-            {:ok, _} -> IO.puts("✅ User updated successfully.")
+            {:ok, _} ->
+              {:ok, editar_usuario: "Usuario editado correctamente"}
+
             {:error, changeset} ->
-              IO.puts("❌ Error updating user:")
-              IO.inspect(changeset.errors)
+              errors =
+                changeset
+                |> Ecto.Changeset.traverse_errors(fn {msg, _opts} -> msg end)
+                |> Enum.flat_map(fn {_field, messages} -> messages end)
+                |> Enum.join("; ")
+
+              {:error, editar_usuario: errors}
           end
-        else
-          IO.puts("⚠️ That username cannot be used.")
         end
     end
   end
 
-  # Validation to delete user
   def delete_allowed?(user) do
     user = Repo.preload(user, [:transactions_origin, :transactions_destination])
-
     user.transactions_origin == [] and user.transactions_destination == []
   end
 
-  # Delete user
   def delete_user(id) do
     case Repo.get(Users, id) do
-      nil ->
-        IO.puts("⚠️ User with ID #{id} not found.")
-
+      nil -> {:error, editar_usuario: "Id de usuario #{id} no encontrado"}
       user ->
         if delete_allowed?(user) do
           Repo.delete(user)
-          IO.puts("🗑️ User deleted successfully.")
+          {:ok, borrar_usuario: "Usuario borrado correctamente"}
         else
-          IO.puts("⚠️ Cannot delete user: user has associated transactions.")
+          {:error, borrar_usuario: "No se puede borrar usuario: tiene transacciones asociadas"}
         end
     end
   end
 
-  # View user
-  def view_user(id) do
-    case Repo.get(Users, id) do
-      nil -> IO.puts("⚠️ User not found.")
-      user -> IO.inspect(user)
-    end
+def view_user(id) do
+  case Repo.get(Users, id) do
+    nil ->
+      {:error, view_user: "User not found"}
+
+    user ->
+      user_str = """
+      id= #{user.id}
+      username: #{user.username}
+      birth_date: #{Date.to_string(user.birth_date)}
+      edit_date: #{Date.to_string(user.edit_date)}
+      inserted_at: #{NaiveDateTime.to_string(user.inserted_at)}
+      """
+      {:ok, ver_usuario: String.trim(user_str)}
   end
+end
+
 end

@@ -4,16 +4,15 @@ defmodule Ledger.Repo.Migrations.CreateTransactions do
   def change do
     create table(:transactions) do
       add :timestamp, :utc_datetime
-      add :amount, :float
-      add :type, :string
-
       add :origin_currency_id, references(:money)
       add :destination_currency_id, references(:money)
+      add :amount, :float
       add :origin_account_id, references(:users)
       add :destination_account_id, references(:users)
-
+      add :type, :string
       timestamps()
-    end
+  end
+
 
     create index(:transactions, :timestamp)
     create index(:transactions, :origin_account_id)

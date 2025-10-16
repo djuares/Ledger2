@@ -1,6 +1,8 @@
 defmodule Ledger.CLI do
-    @default [input_file: "data/input/trans.csv", origin_account: "0",destinate_account: "0", output_file: "data/output/default_output.csv", money_type: "0"]
+    @default [origin_account: "0",destinate_account: "0", money_type: "0"]
   def main(argv) do
+    Logger.configure(level: :info)
+
     argv
     |> parse_args
     |> process
@@ -52,107 +54,106 @@ defmodule Ledger.CLI do
     |> args_to_internal_representation()
   end
 
-  def args_to_internal_representation({["transaction"], opts}) do
+  def args_to_internal_representation({["transacciones"], opts}) do
     origin_account = opts[:c1] || @default[:origin_account]
     destinate_account = opts[:c2] || @default[:destinate_account]
 
-    {"transaction", origin_account,destinate_account}
+    {"transacciones", origin_account,destinate_account}
   end
   def args_to_internal_representation({["balance"], opts}) do
     if is_nil(opts[:c1]) do
       IO.puts(:stderr, "Falta un argumento requerido: -c1=<cuenta>")
       System.halt(1)
     else
-      input_file = opts[:t] || @default[:input_file]
       origin_account = opts[:c1]
       money_type = opts[:m] || @default[:money_type]
-      output_file = opts[:o] || @default[:output_file]
-      {"balance", input_file, origin_account, money_type, output_file}
+      {"balance", origin_account, money_type}
     end
   end
 
 
-  def args_to_internal_representation({["create_user"], opts}) do
+  def args_to_internal_representation({["crear_usuario"], opts}) do
     username = opts[:n]
     birthdate = opts[:b]
 
-    {"create_user", username, birthdate}
+    {"crear_usuario", username, birthdate}
   end
-  def args_to_internal_representation({["edit_user"], opts}) do
+  def args_to_internal_representation({["editar_usuario"], opts}) do
     user_id = opts[:id]
     new_name = opts[:n]
 
-    {"edit_user", user_id, new_name}
+    {"editar_usuario", user_id, new_name}
   end
-  def args_to_internal_representation({["delete_user"], opts}) do
+  def args_to_internal_representation({["borrar_usuario"], opts}) do
     user_id = opts[:id]
 
-    {"delete_user", user_id}
+    {"borrar_usuario", user_id}
   end
-  def args_to_internal_representation({["view_user"], opts}) do
+  def args_to_internal_representation({["ver_usuario"], opts}) do
     user_id = opts[:id]
 
-    {"view_user", user_id}
+    {"ver_usuario", user_id}
   end
 
 
-  def args_to_internal_representation({["create_money"], opts}) do
+  def args_to_internal_representation({["crear_moneda"], opts}) do
     money_name= opts[:n]
     usd_price= opts[:p]
 
-    {"create_money", money_name, usd_price}
+    {"crear_moneda", money_name, usd_price}
   end
-    def args_to_internal_representation({["edit_money"], opts}) do
+    def args_to_internal_representation({["editar_moneda"], opts}) do
     money_id= opts[:id]
     new_usd_price= opts[:p]
 
-    {"edit_money", money_id, new_usd_price}
+    {"editar_moneda", money_id, new_usd_price}
   end
-  def args_to_internal_representation({["delete_money"], opts}) do
+  def args_to_internal_representation({["borrar_moneda"], opts}) do
     money_id= opts[:id]
 
-    {"delete_money", money_id}
+    {"borrar_moneda", money_id}
   end
-  def args_to_internal_representation({["view_money"], opts}) do
+  def args_to_internal_representation({["ver_moneda"], opts}) do
     money_id= opts[:id]
 
-    {"view_money", money_id}
+    {"ver_moneda", money_id}
   end
 
 
-  def args_to_internal_representation({["high_account"], opts}) do
+  def args_to_internal_representation({["alta_cuenta"], opts}) do
     user_id= opts[:u]
     money_id= opts[:m]
+    amount= opts[:a]
 
-    {"high_account", user_id, money_id}
+    {"alta_cuenta", user_id, money_id, amount}
   end
-  def args_to_internal_representation({["make_transfer"], opts}) do
+  def args_to_internal_representation({["realizar_transferencia"], opts}) do
     id_user_origin= opts[:o]
     id_user_destine= opts[:d]
+    money_id= opts[:m]
     amount= opts[:a]
 
 
-    {"make_transfer", id_user_origin, id_user_destine, amount}
+    {"realizar_transferencia", id_user_origin, id_user_destine, money_id, amount}
   end
-  def args_to_internal_representation({["make_swap"], opts}) do
+  def args_to_internal_representation({["realizar_swap"], opts}) do
     id_user= opts[:u]
     id_money_origin= opts[:mo]
     id_money_destine= opts[:md]
     amount= opts[:a]
 
-    {"make_swap", id_user, id_money_origin, id_money_destine, amount}
+    {"realizar_swap", id_user, id_money_origin, id_money_destine, amount}
   end
-  def args_to_internal_representation({["undo_transaction"], opts}) do
+  def args_to_internal_representation({["deshacer_transaccion"], opts}) do
     id_transaction= opts[:id]
 
-    {"undo_transaction", id_transaction}
+    {"deshacer_transaccion", id_transaction}
   end
-  def args_to_internal_representation({["view_transaction"], opts}) do
+  def args_to_internal_representation({["ver_transaccion"], opts}) do
     id_transaction= opts[:id]
 
-    {"view_transaction", id_transaction}
+    {"ver_transaccion", id_transaction}
   end
-
 
   def args_to_internal_representation(_) do
     :help
@@ -162,74 +163,134 @@ defmodule Ledger.CLI do
     IO.puts("""
     usage:
 
-        ./ledger transaction [option]
+        ./ledger transacciones [option]
 
           Options:
-            -t : transaction file
             -c1 : origin account
             -c2 : destinate account
-            -o : output file
 
         ./ledger balance -c1= [option]
 
           Options:
-            -t : transaction file
             -c1 : origin account
-            -o : output file
             -m : money type
 
-        ./ledger create_user -n=<username> -b=<birth_date>
-        ./ledger edit_user -id=<user-id> -n=<new-username>
-        ./ledger delete_user -id=<user-id>
-        ./ledger view_user -id=<user-id>
+        ./ledger crear_usuario -n=<username> -b=<birth_date>
+        ./ledger editar_usuario -id=<user-id> -n=<new-username>
+        ./ledger borrar_usuario -id=<user-id>
+        ./ledger ver_usuario -id=<user-id>
 
-        ./ledger create_money -n=<money-name> -p=<usd-price>
-        ./ledger edit_money -id=<money-id> -p=<new-usd-price>
-        ./ledger delete_money -id=<money-id>
-        ./ledger view_money -id=<money-id>
+        ./ledger crear_moneda -n=<money-name> -p=<usd-price>
+        ./ledger editar_moneda -id=<money-id> -p=<new-usd-price>
+        ./ledger borrar_moneda -id=<money-id>
+        ./ledger ver_moneda -id=<money-id>
 
-        ./ledger high_account -u=<user-id> -m=<money-id>
-        ./ledger make_transfer -o=<user-id-origin> -d=<user-id-destine> -m=<money-id>
-        ./ledger make_swap -u=<user-id> -mo=<money-id-origin> -md=<money-id-destine> -a=<amount>
-        ./ledger undo_transaction -id=<transaction-id>
-        ./ledger view_transaction -id=<transaction-id>
+        ./ledger alta_cuenta -u=<user-id> -m=<money-id> -a=<amount>
+        ./ledger realizar_transferencia -o=<user-id-origin> -d=<user-id-destine> -m=<money-id> -a=<amount>
+        ./ledger realizar_swap -u=<user-id> -mo=<money-id-origin> -md=<money-id-destine> -a=<amount>
+        ./ledger deshacer_transaccion -id=<transaction-id>
+        ./ledger ver_transaccion -id=<transaction-id>
 
         Examples:
 
-          ./ledger transaction -t=input_file.csv -c1=122 -o=output_file.csv
+          ./ledger transacciones -c1=122
 
           ./ledger balance -c1=122 -m=BTC
     """)
     System.halt(0)
   end
 
-  def process({"transaction", origin_account, destinate_account}) do
+  def process({"transacciones", origin_account, destinate_account}) do
     Ledger.ListTransactions.list(origin_account, destinate_account)
     |> decode_response()
     |> IO.puts()
   end
 
-  def process({"balance", input_file, origin_account, money_type, output_file}) do
-    Ledger.ListBalance.list(input_file,origin_account,  money_type, output_file)
+  def process({"balance", origin_account, money_type}) do
+    Ledger.ListBalance.list(origin_account,  money_type)
     |> decode_response()
     |> IO.puts()
   end
 
-  def process({"create_user", username, birthdate}) do
+  def process({"crear_usuario", username, birthdate}) do
     Ledger.UserOperations.create_user(username, birthdate)
     |> decode_response()
     |> IO.puts()
   end
-  def process({"create_money", money_name, usd_price}) do
+  def process({"editar_usuario", user_id, new_name}) do
+    Ledger.UserOperations.edit_user( user_id, new_name)
+    |> decode_response()
+    |> IO.puts()
+  end
+  def process({"borrar_usuario", user_id}) do
+    Ledger.UserOperations.delete_user(user_id)
+    |> decode_response()
+    |> IO.puts()
+  end
+  def process({"ver_usuario", user_id}) do
+    Ledger.UserOperations.view_user(user_id)
+    |> decode_response()
+    |> IO.puts()
+  end
+
+  def process({"crear_moneda", money_name, usd_price}) do
     Ledger.MoneyOperations.create_money(money_name, usd_price)
     |> decode_response()
     |> IO.puts()
   end
-  def process({"high_account", user_id, money_id}) do
-    Ledger.TransactionOperations.create_high_account(user_id, money_id)
+  def process({"editar_moneda", money_id, new_usd_price}) do
+    Ledger.MoneyOperations.edit_money(money_id, new_usd_price)
     |> decode_response()
     |> IO.puts()
   end
-  def decode_response({:ok, body}), do: body
-  def decode_response({:error, reason}), do: " {:error, #{inspect(reason)}}"
+  def process( {"borrar_moneda", money_id}) do
+    Ledger.MoneyOperations.delete_money(money_id)
+    |> decode_response()
+    |> IO.puts()
+  end
+  def process({"ver_moneda", money_id}) do
+    Ledger.MoneyOperations.show_money(money_id)
+    |> decode_response()
+    |> IO.puts()
+  end
+
+
+  def process({"alta_cuenta", user_id, money_id, amount}) do
+    Ledger.TransactionOperations.create_high_account(user_id, money_id, amount)
+    |> decode_response()
+    |> IO.puts()
+  end
+  def process( {"realizar_transferencia", id_user_origin, id_user_destine, money_id, amount}) do
+    Ledger.TransactionOperations.transfer( id_user_origin, id_user_destine, money_id, amount)
+    |> decode_response()
+    |> IO.puts()
+  end
+  def process({"realizar_swap", id_user, id_money_origin, id_money_destine, amount}) do
+    Ledger.TransactionOperations.swap(id_user, id_money_origin, id_money_destine, amount)
+    |> decode_response()
+    |> IO.puts()
+  end
+  def process( {"deshacer_transaccion", id_transaction}) do
+    Ledger.TransactionOperations.undo_transaction(id_transaction)
+    |> decode_response()
+    |> IO.puts()
+  end
+  def process({"ver_transaccion", id_transaction}) do
+    Ledger.TransactionOperations.show_transaction(id_transaction)
+    |> decode_response()
+    |> IO.puts()
+  end
+
+  def decode_response({:ok, body}) do
+  key = Keyword.keys(body) |> hd()
+  value = Keyword.values(body) |> hd()
+  "#{key}: #{value}"
+end
+
+def decode_response({:error, reason}) do
+  key = Keyword.keys(reason) |> hd()
+  value = Keyword.values(reason) |> hd()
+  "{:error, #{key}: #{value}}"
+end
+
 end

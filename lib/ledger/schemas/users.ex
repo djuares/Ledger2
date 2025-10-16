@@ -14,28 +14,26 @@ defmodule Ledger.Users do
     timestamps() # crea automáticamente :inserted_at y :updated_at
   end
 
-  # Changeset para creación
+  def changeset(user, attrs) do
+  user
+  |> cast(attrs, [:username, :birth_date])
+  |> validate_required([:username, :birth_date], message: "Datos incompletos")
+  |> unique_constraint(:username, message: "Ya existe un usuario con ese nombre")
+  |> validate_age()
+  |> put_change(:edit_date, Date.utc_today())
+end
 
-  def create_changeset(user, attrs) do
-    user
-    |> cast(attrs, [:username, :birth_date])
-    |> validate_required([:username, :birth_date])
-    |> unique_constraint(:username)
-    |> validate_age()
-    |> put_change(:edit_date, Date.utc_today())
-  end
-
-  # Validar que tenga más de 18 años
   defp validate_age(changeset) do
     case get_field(changeset, :birth_date) do
       nil -> changeset
       dob ->
         age = Date.diff(Date.utc_today(), dob) |> div(365)
         if age < 18 do
-          add_error(changeset, :birth_date, "User must be at least 18 years old")
+          add_error(changeset, :birth_date, "Debes ser mayor de 18 años")
         else
           changeset
         end
     end
   end
+
 end

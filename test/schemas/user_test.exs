@@ -3,6 +3,15 @@ defmodule Ledger.UserTest do
 
   alias Ledger.Users
 
+  # Helper para mapear errores del changeset a un formato legible
+  defp errors_on(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+  end
+
   @valid_attrs %{
     username: "sofia",
     birth_date: ~D[2000-01-01]
@@ -45,7 +54,21 @@ defmodule Ledger.UserTest do
     changeset = Users.create_changeset(%Users{}, too_young_attrs)
     refute changeset.valid?
     assert {"User must be at least 18 years old", _} = Keyword.get(changeset.errors, :birth_date)
+    end
+
+  test "username debe ser único" do
+      {:ok, _user} =
+        %Users{}
+        |> Users.create_changeset(%{username: "sofia", birth_date: ~D[2000-01-01]})
+        |> Repo.insert()
+
+      {:error, changeset} =
+        %Users{}
+        |> Users.create_changeset(%{username: "sofia", birth_date: ~D[1999-01-01]})
+        |> Repo.insert()
+
+      assert "has already been taken" in errors_on(changeset).username
+    end
 
 
-  end
 end
