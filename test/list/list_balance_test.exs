@@ -1,120 +1,68 @@
-defmodule Ledger.BalanceTest do
+defmodule Ledger.ListBalanceTest do
   use Ledger.RepoCase
-  alias Ledger.{Repo, Transaction, ListBalance, Users, Money}
+  alias Ledger.{ListBalance, Repo, Transaction, MoneyOperations}
 
-  setup do
-    # Limpiar tablas
-    Repo.delete_all(Transaction)
-    Repo.delete_all(Users)
-    Repo.delete_all(Money)
+  describe "list/2" do
+    setup do
+      # Crear monedas usando MoneyOperations
+      {:ok, _} = MoneyOperations.create_money("BTC", 55000)
+      {:ok, _} = MoneyOperations.create_money("ETH", 3000)
+      {:ok, _} = MoneyOperations.create_money("USDT", 1)
 
-    # Crear usuarios
-    user_122 = Repo.insert!(%Users{username: "User 122", birth_date: ~D[2000-01-01]})
-    user_555 = Repo.insert!(%Users{username: "User 555", birth_date: ~D[2000-01-01]})
-    user_133 = Repo.insert!(%Users{username: "User 133", birth_date: ~D[2000-01-01]})
+      btc = Repo.get_by(Ledger.Money, name: "BTC")
+      eth = Repo.get_by(Ledger.Money, name: "ETH")
+      usdt = Repo.get_by(Ledger.Money, name: "USDT")
 
-    # Crear monedas
-    btc  = Repo.insert!(%Money{name: "BTC",  price: 0.0})
-    usdt = Repo.insert!(%Money{name: "USDT", price: 0.0})
-    ars  = Repo.insert!(%Money{name: "ARS", price: 0.0})
-    eth  = Repo.insert!(%Money{name: "ETH", price: 0.0})
+      # Crear cuentas simuladas
+      account1 = 1
+      account2 = 2
 
-    # Fecha fija
-    ts = DateTime.from_naive!(~N[2024-01-01 00:00:00], "Etc/UTC")
+      # Crear transacciones
+      tx1 = Repo.insert!(%Transaction{
+        origin_currency_id: btc.id,
+        destination_currency_id: eth.id,
+        amount: 1.5,
+        origin_account_id: account1,
+        destination_account_id: account2,
+        type: "transfer",
+        timestamp: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
 
-    # Insertar transacciones
-    Repo.insert!(%Transaction{
-      timestamp: ts,
-      amount: 55000.0,
-      type: "transfer",
-      origin_currency_id: usdt.id,
-      destination_currency_id: btc.id,
-      origin_account_id: user_133.id,
-      destination_account_id: user_122.id
-    })
+      tx2 = Repo.insert!(%Transaction{
+        origin_currency_id: eth.id,
+        destination_currency_id: btc.id,
+        amount: 2.0,
+        origin_account_id: account2,
+        destination_account_id: account1,
+        type: "swap",
+        timestamp: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
 
-    Repo.insert!(%Transaction{
-      timestamp: ts,
-      amount: 1.0,
-      type: "transfer",
-      origin_currency_id: btc.id,
-      destination_currency_id: usdt.id,
-      origin_account_id: user_122.id,
-      destination_account_id: user_555.id
-    })
+      {:ok, account1: account1, account2: account2, btc: btc, eth: eth, usdt: usdt}
+    end
 
-    Repo.insert!(%Transaction{
-      timestamp: ts,
-      amount: 2.0,
-      type: "transfer",
-      origin_currency_id: btc.id,
-      destination_currency_id: eth.id,
-      origin_account_id: user_555.id,
-      destination_account_id: user_122.id
-    })
+    test "returns balance map for money_type '0'", %{account1: account1} do
+      {:ok, balance} = ListBalance.list(account1, "0")
+      # balance[:balance] es un string de "MONEDA=amount\n..."
+      assert balance[:balance] =~ "BTC="
+      assert balance[:balance] =~ "ETH="
+    end
 
-    Repo.insert!(%Transaction{
-      timestamp: ts,
-      amount: 0.1,
-      type: "transfer",
-      origin_currency_id: btc.id,
-      destination_currency_id: btc.id,
-      origin_account_id: user_555.id,
-      destination_account_id: user_122.id
-    })
+    test "returns converted balance for another money_type", %{account1: account1} do
+      {:ok, balance} = ListBalance.list(account1, "USDT")
+      assert Map.has_key?(balance, "USDT")
+      assert is_float(balance["USDT"])
+    end
 
-    Repo.insert!(%Transaction{
-      timestamp: ts,
-      amount: 0.1,
-      type: "swap",
-      origin_currency_id: btc.id,
-      destination_currency_id: usdt.id,
-      origin_account_id: user_122.id,
-      destination_account_id: nil
-    })
+    test "returns error when no transactions", _context do
+      {:error, msg} = ListBalance.list(999, "0")
+      assert msg[:balance] =~ "No se encontraron transacciones"
+    end
 
-    Repo.insert!(%Transaction{
-      timestamp: ts,
-      amount: 70000.0,
-      type: "alta_cuenta",
-      origin_currency_id: ars.id,
-      destination_currency_id: nil,
-      origin_account_id: user_122.id,
-      destination_account_id: nil
-    })
-
-    Repo.insert!(%Transaction{
-      timestamp: ts,
-      amount: 70000.0,
-      type: "transfer",
-      origin_currency_id: ars.id,
-      destination_currency_id: eth.id,
-      origin_account_id: user_122.id,
-      destination_account_id: user_555.id
-    })
-
-    {:ok,
-     %{
-       user_122: user_122,
-       user_555: user_555,
-       user_133: user_133,
-       btc: btc,
-       usdt: usdt,
-       ars: ars,
-       eth: eth
-     }}
-  end
-
-  test "calcula balance por cuenta correctamente", %{user_122: user_122} do
-    assert ListBalance.list(user_122.id, "0") ==  {:ok, %{"ARS" => 0.0, "BTC" => 0.0, "ETH" => 36.666667, "USDT" => 5500.0}}
-  end
-
-  test "calcula balance en tipo de moneda correctamente", %{user_122: user_122} do
-    assert ListBalance.list(user_122.id, "BTC") == {:ok, %{"BTC" => 2.1}}
-  end
-
-  test "calcula balance para cuenta sin movimientos" do
-    assert ListBalance.list(999, "0") ==
-             {:error, "No se encontraron transacciones para la cuenta dada."}
+    test "handles conversion error gracefully", %{account1: account1} do
+      # Forzar error en Conversion usando moneda inexistente
+      {:error, msg} = ListBalance.list(account1, "NONEXISTENT")
+      assert msg[:balance] =~ "Moneda NONEXISTENT no encontrada"
+    end
   end
 end

@@ -17,13 +17,13 @@ defmodule Ledger.MoneyTest do
     test "valida que todos los campos sean obligatorios" do
       changeset = Money.changeset(%Money{}, %{})
       refute changeset.valid?
-      assert %{name: ["can't be blank"], price: ["can't be blank"]} = errors_on(changeset)
+      assert %{name: ["dato incompleto"], price: ["dato incompleto"]}= errors_on(changeset)
     end
 
     test "valida que el precio no puede ser negativo" do
       changeset = Money.changeset(%Money{}, %{name: "USD", price: -1.0})
       refute changeset.valid?
-      assert "must be greater than or equal to 0" in errors_on(changeset).price
+      assert "El precio debe ser mayor o igual a 0" in errors_on(changeset).price
     end
 
     test "valida que el nombre se guarda en mayúsculas y con longitud correcta" do
@@ -51,7 +51,7 @@ defmodule Ledger.MoneyTest do
         |> Money.changeset(%{name: "usd", price: 1.5})
         |> Repo.insert()
 
-      assert "has already been taken" in errors_on(changeset).name
+      assert  "Ya existe una moneda con ese nombre" in errors_on(changeset).name
     end
 
     test "id es único (primary key autogenerado)" do

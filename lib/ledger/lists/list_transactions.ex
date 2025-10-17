@@ -23,7 +23,7 @@ defmodule Ledger.ListTransactions do
   end
 
   # Función auxiliar para capturar errores de Repo.all
-  defp fetch_transactions(query) do
+  def fetch_transactions(query) do
     try do
       {:ok, Repo.all(query)}
     rescue
@@ -33,14 +33,14 @@ defmodule Ledger.ListTransactions do
   end
 
   # Construye filtros dinámicos según los valores recibidos
-  defp build_filters("0", "0"), do: dynamic([_t], true)
-  defp build_filters("0", dest), do: dynamic([t], t.destination_account_id == ^dest)
-  defp build_filters(orig, "0"), do: dynamic([t], t.origin_account_id == ^orig)
-  defp build_filters(orig, dest),
+  def build_filters("0", "0"), do: dynamic([_t], true)
+  def build_filters("0", dest), do: dynamic([t], t.destination_account_id == ^dest)
+  def build_filters(orig, "0"), do: dynamic([t], t.origin_account_id == ^orig)
+  def build_filters(orig, dest),
     do: dynamic([t], t.origin_account_id == ^orig and t.destination_account_id == ^dest)
 
 
-  defp format_transactions(transactions) do
+  def format_transactions(transactions) do
       transactions
       |> Enum.map(fn t ->
         "#{t.id};#{DateTime.to_unix(t.timestamp)};" <>
@@ -53,7 +53,7 @@ defmodule Ledger.ListTransactions do
       end)
       |> Enum.join("\n")
 
-    # 
+    #
 end
 
 end

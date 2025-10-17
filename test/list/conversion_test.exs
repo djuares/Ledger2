@@ -1,69 +1,67 @@
-defmodule ConversionTest do
-  use ExUnit.Case
+defmodule Ledger.ConversionTest do
+  use Ledger.RepoCase
+  alias Ledger.{Conversion, Money, Repo}
 
+  import Ecto.Query
 
-    test "conversión exitosa entre monedas válidas" do
-      assert {:ok,1.218182} = Ledger.Conversion.convert("USDT", "BTC", 67000)
-      assert {:ok, 67000.01} = Ledger.Conversion.convert("BTC", "USDT", 1.218182)
+  setup do
+    Repo.delete_all(Money)
+
+    Repo.insert!(%Money{name: "USD", price: 1.0})
+    Repo.insert!(%Money{name: "EUR", price: 1.2})
+    Repo.insert!(%Money{name: "JPY", price: 0.008})
+
+    :ok
+  end
+
+  describe "convert/3" do
+    test "convierte correctamente USD a EUR" do
+      {:ok, result} = Conversion.convert("USD", "EUR", 12)
+      # 12 USD * 1.0 / 1.2 ≈ 10.0
+      assert Float.round(result, 6) == 10.0
     end
 
-    test "error cuando moneda origen no existe" do
-      assert {:error, "Una o ambas monedas no son válidas"} =
-               Ledger.Conversion.convert("INVALID", "BTC", 100.0)
+    test "convierte correctamente EUR a USD" do
+      {:ok, result} = Conversion.convert("EUR", "USD", 12)
+      # 12 EUR * 1.2 / 1.0 = 14.4
+      assert Float.round(result, 6) == 14.4
     end
 
-    test "error cuando moneda destino no existe" do
-      assert {:error, "Una o ambas monedas no son válidas"} =
-               Ledger.Conversion.convert("BTC", "INVALID", 100.0)
+    test "error si moneda origen no existe" do
+      assert {:error, msg} = Conversion.convert("XXX", "USD", 10)
+      assert msg == "Moneda XXX no encontrada"
     end
 
-    test "error cuando ambas monedas no existen" do
-      assert {:error, "Una o ambas monedas no son válidas"} =
-               Ledger.Conversion.convert("INVALID1", "INVALID2", 100.0)
+    test "error si moneda destino no existe" do
+      assert {:error, msg} = Conversion.convert("USD", "YYY", 10)
+      assert msg == "Moneda YYY no encontrada"
+    end
+  end
+
+  describe "convert_all_balances/2" do
+    test "convierte balances a moneda destino" do
+      balances = %{"USD" => 12.0, "EUR" => 12.0, "JPY" => 1000.0}
+      {:ok, result} = Conversion.convert_all_balances(balances, "USD")
+      
+      total = 12 + 12*1.2/1.0 + 1000*0.008/1.0
+      assert result["USD"] == Float.round(total, 6)
     end
 
-    test "redondeo correcto a 6 decimales" do
-      assert {:ok, 0.000001} = Ledger.Conversion.convert("USDT", "BTC", 0.055555)
+    test "balance vacio retorna 0" do
+      {:ok, result} = Conversion.convert_all_balances(%{}, "USD")
+      assert result["USD"] == 0.0
     end
 
-    test "conversión con amount cero" do
-      assert {:ok, 0.0} = Ledger.Conversion.convert("BTC", "USDT", 0.0)
+    test "ignora moneda inexistente en balance" do
+      balances = %{"XXX" => 100.0, "USD" => 10.0}
+      {:ok, result} = Conversion.convert_all_balances(balances, "USD")
+      assert result["USD"] == 10.0
     end
 
-
-    test "conversión de múltiples balances a una moneda" do
-      balance_map = %{"BTC" => 1.0, "USDT" => 50000.0, "ETH" => 2.0}
-
-      assert {:ok, %{"BTC" => 2.018182}} = Ledger.Conversion.convert_all_balances(balance_map, "BTC")
+    test "no convierte si ya es la moneda destino" do
+      balances = %{"USD" => 15.0}
+      {:ok, result} = Conversion.convert_all_balances(balances, "USD")
+      assert result["USD"] == 15.0
     end
-
-    test "moneda que ya está en el tipo objetivo no se convierte" do
-      balance_map = %{"BTC" => 2.5, "USDT" => 1000.0}
-
-      assert {:ok, %{"BTC" =>  2.518182}} = Ledger.Conversion.convert_all_balances(balance_map, "BTC")
-    end
-
-    test "maneja errores de conversión individuales" do
-      balance_map = %{"BTC" => 1.0, "INVALID" => 100.0}
-
-      # El balance de la moneda inválida debería ignorarse
-      assert {:ok, %{"BTC" => 1.0}} = Ledger.Conversion.convert_all_balances(balance_map, "BTC")
-    end
-
-    test "mapa vacío devuelve cero" do
-      assert {:ok, %{"BTC" => 0.0}} = Ledger.Conversion.convert_all_balances(%{}, "BTC")
-    end
-
-    test "conversión de múltiples monedas con diferentes tasas" do
-      balance_map = %{
-        "BTC" => 1.0,
-        "USDT" => 50000.0,  # ≈ 0.9 BTC (50000 * 0.000018)
-        "ETH" => 2.0        # ≈ 0.12 BTC (2.0 * 0.06)
-      }
-
-      # Total aproximado: 1.0 + 0.9 + 0.12 = 2.02 BTC
-      assert {:ok, result} = Ledger.Conversion.convert_all_balances(balance_map, "BTC")
-      assert_in_delta result["BTC"], 2.02, 0.01
-    end
-
+  end
 end

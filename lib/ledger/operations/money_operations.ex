@@ -12,21 +12,24 @@ def create_money(money_name, usd_price) do
   |> case do
     {:ok, money} ->
       {:ok, crear_moneda: "Moneda creada correctamente con ID #{money.id}"}
+
     {:error, changeset} ->
       message =
         changeset
-        |> Ecto.Changeset.traverse_errors(fn {msg, _opts} ->
-          if String.contains?(msg, "should be at least") do
-            "El nombre debe tener entre 3 y 4 caracteres"
-          else
-            msg
+        |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+          cond do
+            String.contains?(msg, "should be at least") ->
+              "El nombre debe tener entre 3 y 4 caracteres"
+            String.contains?(msg, "should be at most") ->
+              "El nombre debe tener entre 3 y 4 caracteres"
+            true ->
+              msg
           end
         end)
         |> Enum.map(fn {campo, msgs} -> "#{campo}: #{Enum.join(msgs, ", ")}" end)
         |> Enum.join("; ")
 
       {:error, crear_moneda: message}
-
   end
 end
   @doc """

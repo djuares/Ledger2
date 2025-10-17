@@ -28,51 +28,6 @@ defmodule Ledger.TransactionOperations do
             {:error, alta_cuenta: message}
       end
   end
-
-  def can_undo?(transaction_id) do
-    tx = Repo.get!(Transaction, transaction_id)
-
-    last_for_origin =
-      from(t in Transaction,
-        where: t.origin_account_id == ^tx.origin_account_id,
-        order_by: [desc: t.timestamp],
-        limit: 1
-      )
-      |> Repo.one()
-
-    last_for_destination =
-      from(t in Transaction,
-        where: t.destination_account_id == ^tx.destination_account_id,
-        order_by: [desc: t.timestamp],
-        limit: 1
-      )
-      |> Repo.one()
-
-    tx.id == last_for_origin.id and tx.id == last_for_destination.id
-  end
-
-  def undo_transaction(transaction_id) do
-    tx = Repo.get!(Transaction, transaction_id)
-
-    if can_undo?(transaction_id) do
-      attrs = %{
-        timestamp: DateTime.utc_now(),
-        amount: -tx.amount,
-        type: "deshacer",
-        origin_currency_id: tx.destination_currency_id,
-        destination_currency_id: tx.origin_currency_id,
-        origin_account_id: tx.destination_account_id,
-        destination_account_id: tx.origin_account_id
-      }
-
-      %Transaction{}
-      |> Transaction.changeset(attrs)
-      |> Repo.insert()
-    else
-      {:error, :not_latest_transaction}
-    end
-  end
-
  def transfer(origin_account_id, destination_account_id, currency_id, amount) do
   amount =
     cond do
@@ -241,6 +196,66 @@ def swap(user_id, origin_currency_id, destination_currency_id, amount) do
       end
     end
   end
+
+  def undo_transaction(transaction_id) do
+    case Repo.get(Transaction, transaction_id) do
+      nil ->
+        {:error, undo: "Transacción con ID #{transaction_id} no encontrada"}
+
+      %Transaction{type: type} = tx ->
+        # Verificar si es la última transacción de las cuentas involucradas
+        if can_undo?(tx) do
+          case type do
+            "transfer" ->
+              undo_transfer(tx)
+
+            "swap" ->
+              undo_swap(tx)
+
+            "alta_cuenta" ->
+              {:error, undo: "No se puede deshacer una alta de cuenta después de movimientos posteriores."}
+
+            _ ->
+              {:error, undo: "Tipo de transacción no soportado para deshacer"}
+          end
+        else
+          {:error, undo: "Solo se puede deshacer la última transacción de la cuenta"}
+        end
+    end
+  end
+
+  defp can_undo?(%Transaction{} = tx) do
+    last_for_origin =
+      from(t in Transaction,
+        where: t.origin_account_id == ^tx.origin_account_id,
+        order_by: [desc: t.timestamp],
+        limit: 1
+      )
+      |> Repo.one()
+
+    last_for_destination =
+      if tx.destination_account_id do
+        from(t in Transaction,
+          where: t.destination_account_id == ^tx.destination_account_id,
+          order_by: [desc: t.timestamp],
+          limit: 1
+        )
+        |> Repo.one()
+      else
+        tx
+      end
+
+    tx.id == last_for_origin.id and tx.id == last_for_destination.id
+  end
+
+  defp undo_transfer(%Transaction{} = tx) do
+    transfer(tx.destination_account_id, tx.origin_account_id, tx.origin_currency_id, tx.amount)
+  end
+
+  defp undo_swap(%Transaction{} = tx) do
+    swap(tx.origin_account_id, tx.destination_currency_id, tx.origin_currency_id, tx.amount)
+  end
+
 
   def show_transaction(id) do
     case Repo.get(Transaction, id) do

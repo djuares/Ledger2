@@ -5,7 +5,7 @@ defmodule Ledger.MoneyOperationsTest do
   describe "create_money/2" do
     test "inserts a money record correctly" do
       {:ok, msg} = MoneyOperations.create_money("USD", 100.0)
-      assert msg =~ "Money created successfully with ID"
+      assert msg[:crear_moneda] =~ "Moneda creada correctamente con ID"
 
       money = Repo.get_by(Money, name: "USD")
       assert money.price == 100.0
@@ -13,16 +13,14 @@ defmodule Ledger.MoneyOperationsTest do
       assert money.updated_at != nil
     end
 
-    test "fails when name is missing" do
-      {:error, changeset} = MoneyOperations.create_money("", 100.0)
-      errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
-      assert %{name: [_]} = errors
+    test "fails when name is too short" do
+      {:error, msg} = MoneyOperations.create_money("AB", 100.0)
+      assert msg[:crear_moneda] =~ "El nombre debe tener entre 3 y 4 caracteres"
     end
 
-    test "fails when price is negative" do
-      {:error, changeset} = MoneyOperations.create_money("USD", -10.0)
-      errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
-      assert %{price: [_]} = errors
+    test "fails when name is too long" do
+      {:error, msg} = MoneyOperations.create_money("ABCDE", 100.0)
+      assert msg[:crear_moneda] =~ "El nombre debe tener entre 3 y 4 caracteres"
     end
   end
 
@@ -32,7 +30,7 @@ defmodule Ledger.MoneyOperationsTest do
       money = Repo.get_by(Money, name: "EUR")
 
       {:ok, msg} = MoneyOperations.edit_money(money.id, 1.2)
-      assert msg =~ "updated successfully"
+      assert msg[:editar_moneda] =~ "updated successfully"
 
       updated = Repo.get(Money, money.id)
       assert updated.price == 1.2
@@ -40,7 +38,7 @@ defmodule Ledger.MoneyOperationsTest do
 
     test "returns error when money not found" do
       {:error, msg} = MoneyOperations.edit_money(999, 1.5)
-      assert msg == "Money with ID 999 not found"
+      assert msg[:editar_moneda] =~ "Money with ID 999 not found"
     end
   end
 
@@ -50,25 +48,19 @@ defmodule Ledger.MoneyOperationsTest do
       money = Repo.get_by(Money, name: "GBP")
 
       {:ok, msg} = MoneyOperations.delete_money(money.id)
-      assert msg =~ "deleted successfully"
-
+      assert msg =~ "Money with ID #{money.id} deleted successfully"
       assert Repo.get(Money, money.id) == nil
     end
 
     test "returns error when money not found" do
       {:error, msg} = MoneyOperations.delete_money(999)
-      assert msg == "Money with ID 999 not found"
+      assert msg[:borrar_moneda] =~ "Money with ID 999 not found"
     end
 
-    test "delete_money/1 returns error when money has associated transactions" do
-      # Crear las monedas
-      origin_currency =
-        Repo.insert!(%Ledger.Money{name: "USD", price: 1.0})
+    test "returns error when money has associated transactions" do
+      origin_currency = Repo.insert!(%Money{name: "USD", price: 1.0})
+      destination_currency = Repo.insert!(%Money{name: "ARS", price: 900.0})
 
-      destination_currency =
-        Repo.insert!(%Ledger.Money{name: "ARS", price: 900.0})
-
-      # Crear una transacción asociada
       Repo.insert!(%Ledger.Transaction{
         origin_currency_id: origin_currency.id,
         destination_currency_id: destination_currency.id,
@@ -77,15 +69,10 @@ defmodule Ledger.MoneyOperationsTest do
         timestamp: DateTime.utc_now() |> DateTime.truncate(:second)
       })
 
-      # Intentar eliminar la moneda con transacción asociada
-      result = Ledger.MoneyOperations.delete_money(origin_currency.id)
-
-      assert {:error, _reason} = result
+      {:error, msg} = MoneyOperations.delete_money(origin_currency.id)
+      assert msg[:borrar_moneda] =~ "Cannot delete Money"
     end
-
-
-end
-
+  end
 
   describe "show_money/1" do
     test "returns the money record correctly" do
@@ -93,13 +80,57 @@ end
       money = Repo.get_by(Money, name: "JPY")
 
       {:ok, msg} = MoneyOperations.show_money(money.id)
-      assert msg =~ "JPY"
-      assert msg =~ "150.0"
+      assert msg[:ver_moneda] =~ "JPY"
+      assert msg[:ver_moneda] =~ "150.0"
     end
 
     test "returns error when money not found" do
       {:error, msg} = MoneyOperations.show_money(999)
-      assert msg == "Money with ID 999 not found"
+      assert msg[:ver_moneda] =~ "Moneda no encontrada"
     end
   end
+
+  describe "create_money/2 - additional edge cases" do
+    test "fails when price is negative" do
+      {:error, msg} = MoneyOperations.create_money("BTC", -100.0)
+      assert msg[:crear_moneda] =~ "price" # Asumiendo que tu changeset valida precio positivo
+    end
+
+
+    test "fails when name is not unique" do
+      {:ok, _} = MoneyOperations.create_money("ETH", 2000.0)
+      {:error, msg} = MoneyOperations.create_money("ETH", 2500.0)
+      assert msg[:crear_moneda] =~ "name" # Por el unique_constraint
+    end
+  end
+
+  describe "edit_money/2 - additional tests" do
+    setup do
+      {:ok, _} = MoneyOperations.create_money("TEST", 1.0)
+      money = Repo.get_by(Money, name: "TEST")
+      %{money: money}
+    end
+
+    test "fails when updating with invalid price", %{money: money} do
+      {:error, msg} = MoneyOperations.edit_money(money.id, -50.0)
+      assert msg[:crear_moneda] =~ "price" # El mensaje viene como :crear_moneda por el case
+    end
+
+    test "fails when updating with non-numeric price", %{money: money} do
+      # Esto probablemente fallará en el cast del changeset
+      {:error, msg} = MoneyOperations.edit_money(money.id, "invalid")
+      assert msg[:crear_moneda] =~ "price"
+    end
+
+    test "updates timestamp when price changes", %{money: money} do
+      original_updated_at = money.updated_at
+      :timer.sleep(1000) # Pequeña pausa para asegurar diferencia de tiempo
+
+      {:ok, _} = MoneyOperations.edit_money(money.id, 2.0)
+      updated = Repo.get(Money, money.id)
+
+      assert updated.updated_at != original_updated_at
+    end
+  end
+
 end
