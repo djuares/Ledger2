@@ -129,7 +129,7 @@ end
 defp saldo_suficiente?(balance_map, currency_id, amount) do
   case Ledger.Repo.get(Ledger.Money, currency_id) do
     nil ->
-      IO.puts("No se encontró la moneda en la base de datos")
+      IO.puts("❌ No se encontró la moneda con ID #{currency_id} en la base de datos")
       false
 
     money ->
@@ -137,6 +137,7 @@ defp saldo_suficiente?(balance_map, currency_id, amount) do
       current_balance >= amount
   end
 end
+
 
 def swap(user_id, origin_currency_id, destination_currency_id, amount) do
   amount =
@@ -197,32 +198,51 @@ def swap(user_id, origin_currency_id, destination_currency_id, amount) do
     end
   end
 
-  def undo_transaction(transaction_id) do
-    case Repo.get(Transaction, transaction_id) do
-      nil ->
-        {:error, undo: "Transacción con ID #{transaction_id} no encontrada"}
+def undo_transaction(transaction_id) do
+  case Repo.get(Transaction, transaction_id) do
+    nil ->
+      {:error, undo: "Transacción no encontrada"}
 
-      %Transaction{type: type} = tx ->
-        # Verificar si es la última transacción de las cuentas involucradas
-        if can_undo?(tx) do
-          case type do
-            "transfer" ->
-              undo_transfer(tx)
+    %Transaction{type: type} = tx ->
+      if can_undo?(tx) do
+        case type do
+          "transfer" ->
+            undo_transfer(tx)
 
-            "swap" ->
-              undo_swap(tx)
+          "swap" ->
+            undo_swap(tx)
 
-            "alta_cuenta" ->
-              {:error, undo: "No se puede deshacer una alta de cuenta después de movimientos posteriores."}
+          "alta_cuenta" ->
+            if has_later_transactions?(tx) do
+              {:error, undo: "No se puede deshacer la alta de cuenta: hay transacciones posteriores"}
+            else
+              undo_high_account(tx)
+            end
 
-            _ ->
-              {:error, undo: "Tipo de transacción no soportado para deshacer"}
-          end
-        else
-          {:error, undo: "Solo se puede deshacer la última transacción de la cuenta"}
+          _ ->
+            {:error, undo: "Tipo de transacción no soportado para deshacer"}
         end
-    end
+      else
+        {:error, undo: "Solo se puede deshacer la última transacción de la cuenta"}
+      end
   end
+end
+defp has_later_transactions?(%Transaction{} = tx) do
+  count =
+    from(t in Transaction,
+      where:
+        t.origin_account_id == ^tx.origin_account_id and
+          t.timestamp > ^tx.timestamp
+    )
+    |> Repo.aggregate(:count)
+
+  count > 0
+end
+defp undo_high_account(%Transaction{id: id} = tx) do
+  Repo.delete(tx)
+  {:ok, undo: "Alta de cuenta deshecha correctamente"}
+end
+
 
   defp can_undo?(%Transaction{} = tx) do
     last_for_origin =
@@ -249,12 +269,24 @@ def swap(user_id, origin_currency_id, destination_currency_id, amount) do
   end
 
   defp undo_transfer(%Transaction{} = tx) do
-    transfer(tx.destination_account_id, tx.origin_account_id, tx.origin_currency_id, tx.amount)
-  end
+
+  destination_str = to_string(tx.destination_account_id)
+  origin_str = to_string(tx.origin_account_id)
+  currency_str = to_string(tx.origin_currency_id)
+  amount_str = Float.to_string(tx.amount)
+
+  transfer(destination_str, origin_str, currency_str, amount_str)
+end
 
   defp undo_swap(%Transaction{} = tx) do
-    swap(tx.origin_account_id, tx.destination_currency_id, tx.origin_currency_id, tx.amount)
-  end
+    origin_str = to_string(tx.origin_account_id)
+    dest_currency_str = to_string(tx.destination_currency_id)
+    origin_currency_str = to_string(tx.origin_currency_id)
+    amount_str = Float.to_string(tx.amount)
+
+    swap(origin_str, dest_currency_str, origin_currency_str, amount_str)
+end
+
 
 
   def show_transaction(id) do

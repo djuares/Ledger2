@@ -41,7 +41,7 @@ def list(origin_account, money_type) do
 end
 
   # Función auxiliar para capturar errores de Repo.all
-  defp fetch_transactions(query) do
+  def fetch_transactions(query) do
     try do
       {:ok, Repo.all(query)}
     rescue
@@ -121,7 +121,7 @@ end
     end
   end
 
-  defp combine_balances(acredit_balances, debit_balances) do
+  def combine_balances(acredit_balances, debit_balances) do
     Map.merge(acredit_balances, debit_balances, fn _currency, acredit_amount, debit_amount ->
       acredit_amount + debit_amount
     end)

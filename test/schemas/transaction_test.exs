@@ -6,8 +6,8 @@ defmodule Ledger.TransactionTest do
     setup do
       user1 = Repo.insert!(%Users{username: "juan", birth_date: ~D[2000-01-01]})
       user2 = Repo.insert!(%Users{username: "ana", birth_date: ~D[1995-05-05]})
-      btc = Repo.insert!(%Money{name: "BTC", price: 50000.0})
-      eth = Repo.insert!(%Money{name: "ETH", price: 3000.0})
+      btc = Repo.insert!(%Money{name: "BTCs", price: 50000.0})
+      eth = Repo.insert!(%Money{name: "ETHs", price: 3000.0})
       {:ok, users: [user1, user2], money: [btc, eth]}
     end
 

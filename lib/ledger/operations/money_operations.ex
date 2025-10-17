@@ -64,35 +64,26 @@ end
     end
   end
 
-  @doc """
-  Returns true if the money entity can be deleted (no transactions associated).
-  """
-  def delete_allowed?(money) do
-    money = Ledger.Repo.preload(money, [:transactions_as_origin, :transactions_as_destination])
-    Enum.empty?(money.transactions_as_origin) and Enum.empty?(money.transactions_as_destination)
-  end
+def delete_allowed?(money) do
+  money = Repo.preload(money, [:transactions_as_origin, :transactions_as_destination])
+  money.transactions_as_origin == [] and money.transactions_as_destination == []
+end
 
-  @doc """
-  Deletes a Money record given its ID, only if it has no associated transactions.
-  """
-  def delete_money(id) do
-    case Repo.get(Money, id) do
-      nil ->
-        {:error, borrar_moneda: "Money with ID #{id} not found"}
-      money ->
-        money = Repo.preload(money, [:transactions_as_origin, :transactions_as_destination])
-        if delete_allowed?(money) do
-          case Repo.delete(money) do
-            {:ok, _struct} ->
-              {:ok, "Money with ID #{id} deleted successfully"}
-            {:error, changeset} ->
-              {:error, borrar_moneda:  changeset}
-          end
-        else
-          {:error, borrar_moneda:  "Cannot delete Money with ID #{id} because it has associated transactions"}
-        end
-    end
+def delete_money(id) do
+  case Repo.get(Money, id) do
+    nil ->
+      {:error, borrar_moneda: "Id de moneda #{id} no encontrado"}
+
+    money ->
+      if delete_allowed?(money) do
+        Repo.delete(money)
+        {:ok, borrar_moneda: "Moneda borrada correctamente"}
+      else
+        {:error, borrar_moneda: "No se puede borrar moneda: tiene transacciones asociadas"}
+      end
   end
+end
+
   @doc """
   Retrieves a Money record by its ID.
   """
@@ -112,4 +103,5 @@ end
         {:ok, ver_moneda: String.trim(money_str)}
     end
   end
+
 end

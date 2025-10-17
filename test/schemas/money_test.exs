@@ -21,15 +21,15 @@ defmodule Ledger.MoneyTest do
     end
 
     test "valida que el precio no puede ser negativo" do
-      changeset = Money.changeset(%Money{}, %{name: "USD", price: -1.0})
+      changeset = Money.changeset(%Money{}, %{name: "USDT", price: -1.0})
       refute changeset.valid?
       assert "El precio debe ser mayor o igual a 0" in errors_on(changeset).price
     end
 
     test "valida que el nombre se guarda en mayúsculas y con longitud correcta" do
-      changeset = Money.changeset(%Money{}, %{name: "usd", price: 1.0})
+      changeset = Money.changeset(%Money{}, %{name: "usdt", price: 1.0})
       assert changeset.valid?
-      assert get_change(changeset, :name) == "USD"
+      assert get_change(changeset, :name) == "USDT"
     end
 
     test "rechaza nombres con menos de 3 o más de 4 letras" do
@@ -43,12 +43,12 @@ defmodule Ledger.MoneyTest do
     test "valida que el nombre sea único" do
       {:ok, _} =
         %Money{}
-        |> Money.changeset(%{name: "USD", price: 1.0})
+        |> Money.changeset(%{name: "USDT", price: 1.0})
         |> Repo.insert()
 
       {:error, changeset} =
         %Money{}
-        |> Money.changeset(%{name: "usd", price: 1.5})
+        |> Money.changeset(%{name: "usdt", price: 1.5})
         |> Repo.insert()
 
       assert  "Ya existe una moneda con ese nombre" in errors_on(changeset).name
@@ -57,12 +57,12 @@ defmodule Ledger.MoneyTest do
     test "id es único (primary key autogenerado)" do
       {:ok, usd} =
         %Money{}
-        |> Money.changeset(%{name: "USD", price: 1.0})
+        |> Money.changeset(%{name: "USDT", price: 1.0})
         |> Repo.insert()
 
       {:ok, eur} =
         %Money{}
-        |> Money.changeset(%{name: "EUR", price: 2.0})
+        |> Money.changeset(%{name: "EURS", price: 2.0})
         |> Repo.insert()
 
       assert usd.id != eur.id

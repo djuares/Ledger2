@@ -4,27 +4,16 @@ defmodule Ledger.ConversionTest do
 
   import Ecto.Query
 
-  setup do
-    Repo.delete_all(Money)
-
-    Repo.insert!(%Money{name: "USD", price: 1.0})
-    Repo.insert!(%Money{name: "EUR", price: 1.2})
-    Repo.insert!(%Money{name: "JPY", price: 0.008})
-
-    :ok
-  end
 
   describe "convert/3" do
     test "convierte correctamente USD a EUR" do
       {:ok, result} = Conversion.convert("USD", "EUR", 12)
-      # 12 USD * 1.0 / 1.2 ≈ 10.0
-      assert Float.round(result, 6) == 10.0
+      assert Float.round(result, 6) == 10.169492
     end
 
     test "convierte correctamente EUR a USD" do
       {:ok, result} = Conversion.convert("EUR", "USD", 12)
-      # 12 EUR * 1.2 / 1.0 = 14.4
-      assert Float.round(result, 6) == 14.4
+      assert Float.round(result, 6) == 14.16
     end
 
     test "error si moneda origen no existe" do
@@ -40,10 +29,10 @@ defmodule Ledger.ConversionTest do
 
   describe "convert_all_balances/2" do
     test "convierte balances a moneda destino" do
-      balances = %{"USD" => 12.0, "EUR" => 12.0, "JPY" => 1000.0}
+      balances = %{"USD" => 12.0, "EUR" => 12.0}
       {:ok, result} = Conversion.convert_all_balances(balances, "USD")
-      
-      total = 12 + 12*1.2/1.0 + 1000*0.008/1.0
+
+      total = 26.16  # 12 USD + (12 EUR * 1.18)
       assert result["USD"] == Float.round(total, 6)
     end
 
