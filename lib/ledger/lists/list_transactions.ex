@@ -41,10 +41,19 @@ defmodule Ledger.ListTransactions do
 
 
   defp format_transactions(transactions) do
-    transactions
-    |> Enum.map(fn t ->
-      "#{t.id};#{DateTime.to_unix(t.timestamp)};#{t.origin_currency_id};#{t.amount};#{t.origin_account_id};#{t.destination_account_id};#{t.type}"
-    end)
-    |> Enum.join("\n")
-  end
+      transactions
+      |> Enum.map(fn t ->
+        "#{t.id};#{DateTime.to_unix(t.timestamp)};" <>
+        "#{Map.get(t.origin_currency || %{}, :name, "")};" <>
+        "#{Map.get(t.destination_currency || %{}, :name, "")};" <>
+        "#{t.amount};" <>
+        "#{t.origin_account_id};" <>
+        "#{t.destination_account_id || ""};" <>
+        "#{t.type}"
+      end)
+      |> Enum.join("\n")
+
+    # 
+end
+
 end

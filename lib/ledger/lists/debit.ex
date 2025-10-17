@@ -1,13 +1,10 @@
 defmodule Ledger.Debit do
 
-  def debit_balance(transactions) do
-    Enum.reduce(transactions, %{}, fn tx, acc ->
-      # Obtener el nombre de la moneda de origen
-      moneda_origen = tx.origin_currency.name
-      monto = tx.amount
-
-      # Actualizar el balance: los débitos son negativos
+def debit_balance(debits) do
+    Enum.reduce(debits, %{}, fn debit, acc ->
+      [_, _, moneda_origen, _, monto_str, _, _, _] = String.split(debit, ";")
+      {monto, _} = Float.parse(monto_str)
       Map.update(acc, moneda_origen, -monto, &(&1 - monto))
     end)
-  end
+end
 end

@@ -78,7 +78,7 @@ end
 def view_user(id) do
   case Repo.get(Users, id) do
     nil ->
-      {:error, view_user: "User not found"}
+      {:error, view_user: "Usuario con ID #{id} no encontrado"}
 
     user ->
       user_str = """

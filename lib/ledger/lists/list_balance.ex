@@ -1,112 +1,130 @@
 defmodule Ledger.ListBalance do
   import Ecto.Query
-  alias Ledger.{Repo, Transaction, Conversion, Debit, Acredit}
+  alias Ledger.{Repo, Transaction}
 
-  # Punto de entrada principal
+  # Función principal: devuelve {:ok, string} con las transacciones filtradas
   def list(origin_account, money_type) do
-    with {:ok, transactions} <- fetch_transactions(origin_account),
-        {:ok, total_balance} <- process_transactions(transactions, origin_account, money_type) do
+    query =
+      from t in Transaction,
+        where: ^build_filters(origin_account, money_type),
+        select: t
 
-      balance_str =
-        total_balance
-        |> Enum.map(fn {currency, amount} ->
-          "#{currency}: #{amount}"
-        end)
-        |> Enum.join("\n")
+    with {:ok, transactions} <- fetch_transactions(query) do
+      case transactions do
+        [] ->
+          {:error, balance: "No se encontraron transacciones para los filtros dados."}
 
+        transactions ->
+          transactions = Repo.preload(transactions, [:origin_currency, :destination_currency, :origin_account, :destination_account])
 
-      {:ok, balance: String.trim(balance_str)}
-    else
-      {:error, msg} ->
-        {:error, balance: msg}
+          case format_transactions(transactions) do
+            {:ok, content} ->
+
+              case process_content(content, origin_account, money_type) do
+                {:ok, balance_map} ->
+                  balance_str = format_balance(balance_map)
+                  {:ok, balance: balance_str}
+
+                {:error, message} ->
+                  {:error, balance: message}
+              end
+            {:error, message} -> {:error, balance: message}
+          end
+      end
     end
   end
 
-
-
-
-
-  # Consulta a la base de datos
-  defp fetch_transactions(origin_account) do
-    query =
-      from t in Transaction,
-        where: t.origin_account_id == ^origin_account or t.destination_account_id == ^origin_account,
-        preload: [
-          :origin_currency,
-          :destination_currency,
-          :origin_account,
-          :destination_account
-        ]
+  # Función auxiliar para capturar errores de Repo.all
+  defp fetch_transactions(query) do
     try do
       {:ok, Repo.all(query)}
     rescue
-      e in DBConnection.ConnectionError ->
-        {:error, "Error en la base de datos: #{e.message}"}
-
-      e ->
-        {:error, "Error inesperado: #{inspect(e)}"}
+      e in DBConnection.ConnectionError -> {:error, "Error en la base de datos: #{e.message}"}
+      e -> {:error, "Error inesperado: #{inspect(e)}"}
     end
   end
 
-  # Procesa las transacciones obtenidas
-  defp process_transactions(transactions, origin_account, "0") do
-  IO.inspect(transactions, label: ">>> Transacciones recibidas")
+  defp build_filters(origin_account, _money_type) do
+    dynamic([t], t.origin_account_id == ^origin_account or t.destination_account_id == ^origin_account)
+  end
 
-  {debits, credits} = categorize_transactions_fixed(transactions, origin_account)
+  defp format_transactions(transactions) do
+  try do
+    formatted =
+      transactions
+      |> Enum.map(fn t ->
+        "#{t.id};#{DateTime.to_unix(t.timestamp)};" <>
+        "#{Map.get(t.origin_currency || %{}, :name, "")};" <>
+        "#{Map.get(t.destination_currency || %{}, :name, "")};" <>
+        "#{t.amount};" <>
+        "#{t.origin_account_id};" <>
+        "#{t.destination_account_id || ""};" <>
+        "#{t.type}"
+      end)
+      |> Enum.join("\n")
 
-  IO.inspect(debits, label: ">>> Lista 5 (debits)")
-  IO.inspect(credits, label: ">>> Lista 6 (credits)")
-
-  result2 = Debit.debit_balance(debits)
-  IO.inspect(result2, label: ">>> Debits procesados (result2)")
-
-  result = Acredit.acredit_balance(credits)
-  IO.inspect(result, label: ">>> Credits procesados (result)")
-
-  total_balance = combine_balances(result, result2)
-  IO.inspect(total_balance, label: ">>> Balance total combinado")
-
-  {:ok, total_balance}
+    {:ok, formatted}
+  rescue
+    e ->
+      {:error, "Error al formatear transacciones: #{inspect(e)}"}
+  end
 end
-defp process_transactions(transactions, origin_account, money_type) do
-    case process_transactions(transactions, origin_account, "0") do
+  def process_content(content, origin_account, "0") do
+  lines = content
+    |> String.split("\n")
+    |> Enum.filter(&(&1 != ""))
+    |> Enum.with_index(1)
+
+      {list_5, list_6} = Enum.reduce(lines, {[], []}, fn {line, _line_number}, {acc_5, acc_6} ->
+        parts = String.split(line, ";")
+
+        cond do
+          Enum.at(parts, 5) == origin_account && Enum.at(parts, 7) == "transfer" ->
+            {[line | acc_5], acc_6}
+          Enum.at(parts, 6) == origin_account && Enum.at(parts, 7) == "transfer" ->
+            {acc_5, [line | acc_6]}
+          Enum.at(parts, 5) == origin_account && Enum.at(parts, 7) == "alta_cuenta" ->
+            {acc_5, [line | acc_6]}
+          Enum.at(parts, 5) == origin_account && Enum.at(parts, 7) == "swap" ->
+            {acc_5, [line | acc_6]}
+          Enum.at(parts, 6) == origin_account ->
+            {acc_5, [line | acc_6]}
+          true ->
+            {acc_5, acc_6}
+        end
+      end)
+      |> then(fn {l5, l6} -> {Enum.reverse(l5), Enum.reverse(l6)} end)
+
+      result2 = Ledger.Debit.debit_balance(list_5)
+      result = Ledger.Acredit.acredit_balance(list_6)
+      total_balance = combine_balances(result, result2)
+      {:ok, total_balance}
+  end
+
+
+  def process_content(content, origin_account, money_type) do
+    case process_content(content, origin_account, "0") do
       {:ok, balance_map} ->
-        case Conversion.convert_all_balances(balance_map, money_type) do
+        case Ledger.Conversion.convert_all_balances(balance_map, money_type) do
           {:ok, converted_balance} -> {:ok, converted_balance}
           {:error, message} -> {:error, message}
         end
+
       {:error, message} ->
         {:error, message}
     end
   end
 
-defp categorize_transactions_fixed(transactions, account_id) do
-  Enum.reduce(transactions, {[], []}, fn t, {debits, credits} ->
-    cond do
-      # DEBITS: Transferencias salientes donde soy el origin
-      t.origin_account_id == account_id and t.type == "transfer" ->
-        {[t | debits], credits}
-
-      # CREDITS: Transferencias entrantes donde soy el destination
-      t.destination_account_id == account_id and t.type == "transfer" ->
-        {debits, [t | credits]}
-
-      # CREDITS: Altas de cuenta y swaps donde soy el origin
-      t.origin_account_id == account_id and t.type in ["alta_cuenta", "swap"] ->
-        {debits, [t | credits]}
-
-      # Caso por defecto - no incluir en ninguna lista
-      true ->
-        {debits, credits}
-    end
-  end)
-  |> then(fn {d, c} -> {Enum.reverse(d), Enum.reverse(c)} end)
-end
-
-
   defp combine_balances(acredit_balances, debit_balances) do
     Map.merge(acredit_balances, debit_balances, fn _currency, acredit_amount, debit_amount ->
       acredit_amount + debit_amount
     end)
+end
+
+  defp format_balance(balance_map) when is_map(balance_map) do
+    balance_map
+    |> Enum.map(fn {currency, amount} -> "#{currency}=#{amount}" end)
+    |> Enum.join("\n")
   end
+
 end

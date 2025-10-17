@@ -73,7 +73,46 @@ defmodule Ledger.TransactionOperations do
     end
   end
 
-  def transfer(origin_account_id, destination_account_id, currency_id, amount) do
+ def transfer(origin_account_id, destination_account_id, currency_id, amount) do
+  amount =
+    cond do
+      is_binary(amount) ->
+        case Float.parse(amount) do
+          {val, _} -> val
+          :error -> raise ArgumentError, "Monto inválido: #{inspect(amount)}"
+        end
+
+      is_number(amount) -> amount
+      true -> raise ArgumentError, "Monto inválido: #{inspect(amount)}"
+    end
+
+  cond do
+    amount <= 0 ->
+      {:error, realizar_transferencia: "El monto a transferir debe ser mayor que cero."}
+
+    not cuentas_dadas_de_alta?(origin_account_id, destination_account_id) ->
+      {:error, realizar_transferencia: "Ambas cuentas deben tener una transacción de tipo 'alta_cuenta' antes de transferir."}
+
+    true ->
+      case Ledger.ListBalance.list(origin_account_id, "0") do
+        {:ok, balance: balance_str} ->
+          balance_map = parse_balance_string(balance_str)
+
+          case saldo_suficiente?(balance_map, currency_id, amount) do
+            true ->
+              realizar_transferencia(origin_account_id, destination_account_id, currency_id, amount)
+
+            false ->
+              {:error, realizar_transferencia: "Saldo insuficiente para realizar la transferencia con esa moneda."}
+          end
+
+        {:error, balance: msg} ->
+          {:error, realizar_transferencia: "No se pudo obtener el balance: #{msg}"}
+      end
+  end
+end
+
+defp realizar_transferencia(origin_account_id, destination_account_id, currency_id, amount) do
   attrs = %{
     type: "transfer",
     amount: amount,
@@ -88,52 +127,138 @@ defmodule Ledger.TransactionOperations do
   |> Transaction.changeset(attrs)
   |> Repo.insert()
   |> case do
-    {:ok, tx} -> {:ok, realizar_transferencia: "Transferencia realizada con ID #{tx.id}"}
+    {:ok, tx} ->
+      {:ok, realizar_transferencia: "Transferencia realizada con ID #{tx.id}"}
+
     {:error, changeset} ->
       errors =
         changeset
-          |> Ecto.Changeset.traverse_errors(fn {msg, _opts} -> msg end)
-          |> Enum.flat_map(fn {_field, messages} -> messages end)
-          |> Enum.join("; ")
-        {:error, realizar_transferencia: errors}
-  end
-end
-def swap(user_id, origin_currency_id, destination_currency_id, amount) do
-  attrs = %{
-    type: "swap",
-    amount: amount,
-    origin_account_id: user_id,
-    destination_account_id: user_id,
-    origin_currency_id: origin_currency_id,
-    destination_currency_id: destination_currency_id,
-    timestamp: DateTime.utc_now() |> DateTime.truncate(:second)
-  }
+        |> Ecto.Changeset.traverse_errors(fn {msg, _opts} -> msg end)
+        |> Enum.flat_map(fn {_field, messages} -> messages end)
+        |> Enum.join("; ")
 
-  %Transaction{}
-  |> Transaction.changeset(attrs)
-  |> Repo.insert()
-  |> case do
-    {:ok, tx} -> {:ok, "Swap realizado con ID #{tx.id}"}
-    {:error, changeset} -> {:error, changeset}
+      {:error, realizar_transferencia: errors}
   end
 end
-def show_transaction(id) do
-  case Repo.get(Transaction, id) do
+
+defp cuentas_dadas_de_alta?(origin_account_id, destination_account_id) do
+  origen_alta? =
+    Repo.exists?(
+      from t in Transaction,
+        where:
+          (t.origin_account_id == ^origin_account_id or t.destination_account_id == ^origin_account_id) and
+            t.type == "alta_cuenta"
+    )
+
+  destino_alta? =
+    Repo.exists?(
+      from t in Transaction,
+        where:
+          (t.origin_account_id == ^destination_account_id or t.destination_account_id == ^destination_account_id) and
+            t.type == "alta_cuenta"
+    )
+
+  origen_alta? and destino_alta?
+end
+
+defp parse_balance_string(balance_str) do
+  balance_str
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn line ->
+    [currency, amount] = String.split(line, "=")
+    {currency, String.to_float(amount)}
+  end)
+  |> Enum.into(%{})
+end
+
+defp saldo_suficiente?(balance_map, currency_id, amount) do
+  case Ledger.Repo.get(Ledger.Money, currency_id) do
     nil ->
-      {:error, "Transacción con ID #{id} no encontrada"}
+      IO.puts("No se encontró la moneda en la base de datos")
+      false
 
-    tx ->
-      {:ok,
-       %{
-         id: tx.id,
-         type: tx.type,
-         amount: tx.amount,
-         origin_account_id: tx.origin_account_id,
-         destination_account_id: tx.destination_account_id,
-         origin_currency_id: tx.origin_currency_id,
-         destination_currency_id: tx.destination_currency_id,
-         timestamp: tx.timestamp
-       }}
+    money ->
+      current_balance = Map.get(balance_map, money.name, 0.0)
+      current_balance >= amount
   end
+end
+
+def swap(user_id, origin_currency_id, destination_currency_id, amount) do
+  amount =
+    cond do
+      is_binary(amount) ->
+        case Float.parse(amount) do
+          {val, _} -> val
+          :error -> raise ArgumentError, "Monto inválido: #{inspect(amount)}"
+        end
+
+      is_number(amount) -> amount
+      true -> raise ArgumentError, "Monto inválido: #{inspect(amount)}"
+    end
+  cond do
+    amount <= 0 ->
+      {:error, realizar_swap: "El monto a intercambiar debe ser mayor que cero."}
+
+    not cuentas_dadas_de_alta?(user_id, user_id) ->
+      {:error,realizar_swap: "La cuenta debe tener una transacción de tipo 'alta_cuenta' antes de hacer swap."}
+
+    true ->
+      case Ledger.ListBalance.list(user_id, "0") do
+        {:ok, balance: balance_str} ->
+          balance_map = parse_balance_string(balance_str)
+
+          if not saldo_suficiente?(balance_map, origin_currency_id, amount) do
+            {:error, realizar_swap: "Saldo insuficiente para realizar el swap con la moneda de origen."}
+          else
+            attrs = %{
+              type: "swap",
+              amount: amount,
+              origin_account_id: user_id,
+              destination_account_id: user_id,
+              origin_currency_id: origin_currency_id,
+              destination_currency_id: destination_currency_id,
+              timestamp: DateTime.utc_now() |> DateTime.truncate(:second)
+            }
+
+            %Transaction{}
+            |> Transaction.changeset(attrs)
+            |> Repo.insert()
+            |> case do
+              {:ok, tx} -> {:ok, realizar_swap: "Swap realizado con ID #{tx.id}"}
+              {:error, changeset} ->
+                errors =
+                  changeset
+                  |> Ecto.Changeset.traverse_errors(fn {msg, _opts} -> msg end)
+                  |> Enum.flat_map(fn {_field, messages} -> messages end)
+                  |> Enum.join("; ")
+
+                {:error, realizar_swap: errors}
+            end
+          end
+
+        {:error, balance: msg} ->
+          {:error, "No se pudo obtener el balance: #{msg}"}
+      end
+    end
+  end
+
+  def show_transaction(id) do
+    case Repo.get(Transaction, id) do
+      nil ->
+        {:error, view_transaction: "Transacción con ID #{id} no encontrada"}
+
+      transaction ->
+        transaction_str = """
+        id= #{transaction.id}
+        timestamp: #{DateTime.to_string(transaction.timestamp)}
+        origin_currency_id: #{transaction.origin_currency_id}
+        destination_currency_id: #{transaction.destination_currency_id}
+        amount: #{transaction.amount}
+        origin_account_id: #{transaction.origin_account_id}
+        destination_account_id: #{transaction.destination_account_id}
+        type: #{transaction.type}
+        """
+        {:ok, view_transaction: String.trim(transaction_str)}
+    end
 end
 end
