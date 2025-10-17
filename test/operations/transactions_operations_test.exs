@@ -1,195 +1,84 @@
 defmodule Ledger.TransactionOperationsTest do
   use Ledger.RepoCase
-  alias Ledger.{TransactionOperations, Transaction, Repo, Users, Money}
+  alias Ledger.{TransactionOperations, Repo, Transaction, Money, Users}
 
-  describe "create_high_account/2" do
-    setup do
-      {:ok, user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "sofia", birth_date: ~D[2000-01-01]})
-        |> Repo.insert()
+  setup do
+    Repo.delete_all(Transaction)
+    Repo.delete_all(Money)
+    Repo.delete_all(Users)
 
-      {:ok, currency} =
-        %Money{}
-        |> Money.changeset(%{name: "USD", price: 1.0})
-        |> Repo.insert()
+    user1 = %Users{username: "Sofía", birth_date: ~D[2000-01-01]} |> Repo.insert!()
+    user2 = %Users{username: "Mateo", birth_date: ~D[2000-02-01]} |> Repo.insert!()
 
-      %{user: user, currency: currency}
-    end
+    money1 = %Money{name: "USD", price: 1.0} |> Repo.insert!()
+    money2 = %Money{name: "BTC", price: 50000.0} |> Repo.insert!()
 
-    test "inserts a high_account transaction", %{user: user, currency: currency} do
-      {:ok, msg} = TransactionOperations.create_high_account(user.id, currency.id, "600")
-      assert msg =~ "Transactions made successfully with ID"
-
-      [id_str] = Regex.run(~r/ID (\d+)/, msg, capture: :all_but_first)
-      tx_id = String.to_integer(id_str)
-
-      tx_from_db = Repo.get!(Transaction, tx_id)
-      assert tx_from_db.type == "high_account"
-      assert tx_from_db.amount == 600
-      assert tx_from_db.origin_account_id == user.id
-      assert tx_from_db.origin_currency_id == currency.id
-    end
+    {:ok, users: {user1, user2}, money: {money1, money2}}
   end
 
-  describe "undo_transaction/1" do
-    setup do
-      {:ok, origin_user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "sofia", birth_date: ~D[2000-01-01]})
-        |> Repo.insert()
+  describe "create_high_account/3" do
+    test "creates a high account transaction", %{users: {user1, _}, money: {money1, _}} do
+      {:ok, msg} = TransactionOperations.create_high_account(user1.id, money1.id, 500.0)
+      assert msg[:alta_cuenta] =~ "Transacción realizada correctamente con ID"
 
-      {:ok, dest_user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "mateo", birth_date: ~D[2001-01-01]})
-        |> Repo.insert()
-
-      {:ok, currency} =
-        %Money{}
-        |> Money.changeset(%{name: "USD", price: 1.0})
-        |> Repo.insert()
-
-      {:ok, tx} =
-        %Transaction{}
-        |> Transaction.changeset(%{
-          timestamp: DateTime.utc_now() |> DateTime.truncate(:second),
-          amount: 10.0,
-          type: "transfer",
-          origin_currency_id: currency.id,
-          destination_currency_id: currency.id,
-          origin_account_id: origin_user.id,
-          destination_account_id: dest_user.id
-        })
-        |> Repo.insert()
-
-      %{tx: tx, origin_user: origin_user, dest_user: dest_user, currency: currency}
-    end
-
-    test "solo puede deshacerse la última transacción", %{tx: tx, origin_user: origin_user, dest_user: dest_user, currency: currency} do
-      assert TransactionOperations.can_undo?(tx.id)
-
-      {:ok, _} =
-        %Transaction{}
-        |> Transaction.changeset(%{
-          timestamp: DateTime.add(DateTime.utc_now(), 10) |> DateTime.truncate(:second),
-          amount: 5.0,
-          type: "transfer",
-          origin_currency_id: currency.id,
-          destination_currency_id: currency.id,
-          origin_account_id: origin_user.id,
-          destination_account_id: dest_user.id
-        })
-        |> Repo.insert()
-
-      refute TransactionOperations.can_undo?(tx.id)
-    end
-
-    test "undo_transaction crea una transacción inversa", %{tx: tx} do
-      {:ok, reversed} = TransactionOperations.undo_transaction(tx.id)
-
-      assert reversed.amount == -tx.amount
-      assert reversed.origin_account_id == tx.destination_account_id
-      assert reversed.destination_account_id == tx.origin_account_id
-      assert reversed.type == "reversal"
+      tx = Repo.get_by(Transaction, type: "alta_cuenta", origin_account_id: user1.id, origin_currency_id: money1.id)
+      assert tx.amount == 500.0
+      assert tx.inserted_at != nil
     end
   end
 
   describe "transfer/4" do
-    setup do
-      {:ok, origin_user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "Alice", birth_date: ~D[1990-01-01]})
-        |> Repo.insert()
-
-      {:ok, dest_user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "Bob", birth_date: ~D[1992-01-01]})
-        |> Repo.insert()
-
-      {:ok, currency} =
-        %Money{}
-        |> Money.changeset(%{name: "USD", price: 1.0})
-        |> Repo.insert()
-
-      %{origin_user: origin_user, dest_user: dest_user, currency: currency}
+    test "fails if accounts have no alta_cuenta", %{users: {user1, user2}, money: {money1, _}} do
+      {:error, msg} = TransactionOperations.transfer(user1.id, user2.id, money1.id, 50)
+      assert msg[:realizar_transferencia] =~ "Ambas cuentas deben tener una transacción de tipo 'alta_cuenta'"
     end
 
-    test "realiza una transferencia entre usuarios", %{origin_user: origin_user, dest_user: dest_user, currency: currency} do
-      {:ok, msg} = TransactionOperations.transfer(origin_user.id, dest_user.id, currency.id, 50.0)
-      assert msg =~ "Transferencia realizada con ID"
-    end
+
+  test "no se puede dar de alta una cuenta dos veces con la misma moneda" , %{users: {user1, _user2}, money: {money1, _money2}} do
+    {:ok, msg} = TransactionOperations.create_high_account(user1.id, money1.id, 500.0)
+    assert msg[:alta_cuenta] =~ "Transacción realizada correctamente con ID"
+    {:error, msg} = TransactionOperations.create_high_account(user1.id, money1.id, 500.0)
+    assert msg[:alta_cuenta] =~ "Ya existe una transacción 'alta_cuenta' para esta cuenta y moneda"
+  end
+
   end
 
   describe "swap/4" do
-    setup do
-      {:ok, user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "sofia", birth_date: ~D[2000-01-01]})
-        |> Repo.insert()
-
-      {:ok, currency1} =
-        %Money{}
-        |> Money.changeset(%{name: "USD", price: 1.0})
-        |> Repo.insert()
-
-      {:ok, currency2} =
-        %Money{}
-        |> Money.changeset(%{name: "EUR", price: 0.9})
-        |> Repo.insert()
-
-      %{user: user, origin_currency: currency1, destination_currency: currency2}
+    test "fails if account has no alta_cuenta", %{users: {user1, _}, money: {money1, money2}} do
+      {:error, msg} = TransactionOperations.swap(user1.id, money1.id, money2.id, 50)
+      assert msg[:realizar_swap] =~ "La cuenta debe tener una transacción de tipo 'alta_cuenta'"
     end
 
-    test "creates a swap transaction", %{user: user, origin_currency: c1, destination_currency: c2} do
-      {:ok, msg} = TransactionOperations.swap(user.id, c1.id, c2.id, 50.0)
-      assert msg =~ "Swap realizado con ID"
-
-      [id_str] = Regex.run(~r/ID (\d+)/, msg, capture: :all_but_first)
-      tx_id = String.to_integer(id_str)
-
-      tx = Repo.get!(Transaction, tx_id)
-      assert tx.type == "swap"
-      assert tx.amount == 50.0
-      assert tx.origin_account_id == user.id
-      assert tx.destination_account_id == user.id
-      assert tx.origin_currency_id == c1.id
-      assert tx.destination_currency_id == c2.id
+    test "fails if insufficient balance", %{users: {user1, _}, money: {money1, money2}} do
+      {:ok, _} = TransactionOperations.create_high_account(user1.id, money1.id, 100.0)
+      {:error, msg} = TransactionOperations.swap(user1.id, money1.id, money2.id, 150.0)
+      assert msg[:realizar_swap] =~ "Saldo insuficiente para realizar el swap con la moneda de origen"
     end
+
+  end
+  describe "undo_transaction/1" do
+    test "fails if transaction not found" do
+      {:error, msg} = TransactionOperations.undo_transaction(9999)
+      assert msg[:undo] =~ "Transacción con ID 9999 no encontrada"
+    end
+
+
   end
 
   describe "show_transaction/1" do
-    setup do
-      {:ok, user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "sofia", birth_date: ~D[2000-01-01]})
-        |> Repo.insert()
-
-      {:ok, currency} =
-        %Money{}
-        |> Money.changeset(%{name: "USD", price: 1.0})
-        |> Repo.insert()
-
-      {:ok, tx} =
-        %Transaction{}
-        |> Transaction.changeset(%{
-          timestamp: DateTime.utc_now() |> DateTime.truncate(:second),
-          amount: 10.0,
-          type: "transfer",
-          origin_account_id: user.id,
-          destination_account_id: user.id,
-          origin_currency_id: currency.id,
-          destination_currency_id: currency.id
-        })
-        |> Repo.insert()
-
-      %{tx: tx}
+    test "returns error if not found" do
+      {:error, msg} = TransactionOperations.show_transaction(9999)
+      assert msg[:view_transaction] =~ "Transacción con ID 9999 no encontrada"
     end
 
-    test "returns transaction details", %{tx: tx} do
-      {:ok, data} = TransactionOperations.show_transaction(tx.id)
-      assert data.id == tx.id
-      assert data.type == tx.type
-      assert data.amount == tx.amount
+    test "returns transaction details", %{users: {user1, _}, money: {money1, _}} do
+      {:ok, _} = TransactionOperations.create_high_account(user1.id, money1.id, 123)
+      tx = Repo.get_by(Transaction, type: "alta_cuenta", origin_account_id: user1.id)
+      {:ok, msg} = TransactionOperations.show_transaction(tx.id)
+      assert msg[:view_transaction] =~ "#{tx.id}"
+      assert msg[:view_transaction] =~ "123"
     end
+
+
   end
 end

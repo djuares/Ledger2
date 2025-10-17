@@ -93,14 +93,14 @@ defmodule Ledger.MoneyOperationsTest do
   describe "create_money/2 - additional edge cases" do
     test "fails when price is negative" do
       {:error, msg} = MoneyOperations.create_money("BTC", -100.0)
-      assert msg[:crear_moneda] =~ "price" # Asumiendo que tu changeset valida precio positivo
+      assert msg[:crear_moneda] =~ "price"
     end
 
 
     test "fails when name is not unique" do
       {:ok, _} = MoneyOperations.create_money("ETH", 2000.0)
       {:error, msg} = MoneyOperations.create_money("ETH", 2500.0)
-      assert msg[:crear_moneda] =~ "name" # Por el unique_constraint
+      assert msg[:crear_moneda] =~ "name"
     end
   end
 
@@ -113,7 +113,7 @@ defmodule Ledger.MoneyOperationsTest do
 
     test "fails when updating with invalid price", %{money: money} do
       {:error, msg} = MoneyOperations.edit_money(money.id, -50.0)
-      assert msg[:crear_moneda] =~ "price" # El mensaje viene como :crear_moneda por el case
+      assert msg[:crear_moneda] =~ "price"
     end
 
     test "fails when updating with non-numeric price", %{money: money} do
@@ -124,7 +124,7 @@ defmodule Ledger.MoneyOperationsTest do
 
     test "updates timestamp when price changes", %{money: money} do
       original_updated_at = money.updated_at
-      :timer.sleep(1000) # Pequeña pausa para asegurar diferencia de tiempo
+      :timer.sleep(1000)
 
       {:ok, _} = MoneyOperations.edit_money(money.id, 2.0)
       updated = Repo.get(Money, money.id)

@@ -57,6 +57,7 @@ $ ./ledger --help
     MIX_ENV=test mix ecto.migrate
 
     ```
+    MIX_ENV=test mix run priv/repo/seeds.exs
     2. Ejecutar test
     ```bash
     MIX_ENV=test mix test

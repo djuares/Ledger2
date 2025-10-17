@@ -3,36 +3,42 @@ defmodule Ledger.ListBalance do
   alias Ledger.{Repo, Transaction}
 
   # Función principal: devuelve {:ok, string} con las transacciones filtradas
-  def list(origin_account, money_type) do
-    query =
-      from t in Transaction,
-        where: ^build_filters(origin_account, money_type),
-        select: t
+def list(origin_account, money_type) do
+  query =
+    from t in Transaction,
+      where: ^build_filters(origin_account, money_type),
+      select: t
 
-    with {:ok, transactions} <- fetch_transactions(query) do
-      case transactions do
-        [] ->
-          {:error, balance: "No se encontraron transacciones para los filtros dados."}
+  with {:ok, transactions} <- fetch_transactions(query) do
+    case transactions do
+      [] ->
+        {:error, balance: "No se encontraron transacciones para los filtros dados."}
 
-        transactions ->
-          transactions = Repo.preload(transactions, [:origin_currency, :destination_currency, :origin_account, :destination_account])
+      transactions ->
+        transactions = Repo.preload(transactions, [:origin_currency, :destination_currency, :origin_account, :destination_account])
 
-          case format_transactions(transactions) do
-            {:ok, content} ->
-
-              case process_content(content, origin_account, money_type) do
-                {:ok, balance_map} ->
-                  balance_str = format_balance(balance_map)
-                  {:ok, balance: balance_str}
-
-                {:error, message} ->
-                  {:error, balance: message}
-              end
-            {:error, message} -> {:error, balance: message}
+        {:ok, content} = format_transactions(transactions)
+        money_type_name =
+          if money_type == "0" do
+            "0"
+          else
+            case Repo.get(Ledger.Money, money_type) do
+              nil -> "0"  # fallback
+              %Ledger.Money{name: name} -> name
+            end
           end
-      end
+
+        case process_content(content, origin_account, money_type_name) do
+          {:ok, balance_map} ->
+            balance_str = format_balance(balance_map)
+            {:ok, balance: balance_str}
+
+          {:error, message} ->
+            {:error, balance: message}
+        end
     end
   end
+end
 
   # Función auxiliar para capturar errores de Repo.all
   defp fetch_transactions(query) do

@@ -1,78 +1,90 @@
 defmodule Ledger.UserOperationsTest do
   use Ledger.RepoCase
-  import ExUnit.CaptureIO
-
-  alias Ledger.UserOperations
-  alias Ledger.Users
-  alias Ledger.Repo
+  alias Ledger.{UserOperations, Repo, Users}
 
   describe "create_user/2" do
     test "creates a user successfully" do
-      UserOperations.create_user("sofia", "2000-01-01")
+      {:ok, msg} = UserOperations.create_user("Sofía", "2000-01-01")
+      assert msg[:crear_usuario] =~ "Usuario creado correctamente con ID"
 
-      # Verify the user was inserted
-      user = Repo.get_by(Users, username: "sofia")
-      assert user.username == "sofia"
+      user = Repo.get_by(Users, username: "Sofía")
       assert user.birth_date == ~D[2000-01-01]
+      assert user.inserted_at != nil
+      assert user.updated_at != nil
+    end
+
+    test "fails when birthdate is missing" do
+      {:error, msg} = UserOperations.create_user("Sofía", "")
+      assert msg[:crear_usuario] =~ "Debes ingresar la fecha de nacimiento"
+    end
+
+    test "fails with invalid birthdate format" do
+      {:error, msg} = UserOperations.create_user("Sofía", "01-01-2000")
+      assert msg[:crear_usuario] =~ "Formato de fecha inválido"
     end
   end
 
   describe "edit_user/2" do
     setup do
-      {:ok, user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "juan", birth_date: ~D[2000-01-01]})
-        |> Repo.insert()
+      {:ok, msg} = UserOperations.create_user("Mateo", "2000-02-01")
+      user = Repo.get_by(Users, username: "Mateo")
       %{user: user}
     end
 
-    test "changes the username if valid", %{user: user} do
-      UserOperations.edit_user(user.id, "juan_new")
-      updated = Repo.get!(Users, user.id)
-      assert updated.username == "juan_new"
+    test "edits username successfully", %{user: user} do
+      {:ok, msg} = UserOperations.edit_user(user.id, "Matías")
+      assert msg[:editar_usuario] =~ "Usuario editado correctamente"
+
+      updated = Repo.get(Users, user.id)
+      assert updated.username == "Matías"
     end
 
-    test "does not allow using the same username", %{user: user} do
-      capture_io(fn ->
-        UserOperations.edit_user(user.id, "juan")
-      end)
+    test "fails when new name is the same", %{user: user} do
+      {:error, msg} = UserOperations.edit_user(user.id, "Mateo")
+      assert msg[:editar_usuario] =~ "El nuevo nombre es igual al actual"
+    end
 
-      updated = Repo.get!(Users, user.id)
-      assert updated.username == "juan"
+    test "fails when user not found" do
+      {:error, msg} = UserOperations.edit_user(9999, "NuevoNombre")
+      assert msg[:editar_usuario] =~ "Id de usuario 9999 no encontrado"
     end
   end
-
 
   describe "delete_user/1" do
     setup do
-      {:ok, user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "delete_me", birth_date: ~D[2000-01-01]})
-        |> Repo.insert()
+      {:ok, _} = UserOperations.create_user("Sofía", "2000-01-01")
+      user = Repo.get_by(Users, username: "Sofía")
       %{user: user}
     end
 
-    test "deletes a user without transactions", %{user: user} do
-      UserOperations.delete_user(user.id)
+    test "deletes a user successfully", %{user: user} do
+      {:ok, msg} = UserOperations.delete_user(user.id)
+      assert msg[:borrar_usuario] =~ "Usuario borrado correctamente"
       assert Repo.get(Users, user.id) == nil
+    end
+
+    test "fails when user not found" do
+      {:error, msg} = UserOperations.delete_user(9999)
+      assert msg[:editar_usuario] =~ "Id de usuario 9999 no encontrado"
     end
   end
 
-
   describe "view_user/1" do
     setup do
-      {:ok, user} =
-        %Users{}
-        |> Users.create_changeset(%{username: "view", birth_date: ~D[2000-01-01]})
-        |> Repo.insert()
+      {:ok, _} = UserOperations.create_user("Mateo", "2000-02-01")
+      user = Repo.get_by(Users, username: "Mateo")
       %{user: user}
     end
 
-    test "shows an existing user", %{user: user} do
-      output = capture_io(fn ->
-        UserOperations.view_user(user.id)
-      end)
-      assert String.contains?(output, "view")
+    test "views user successfully", %{user: user} do
+      {:ok, msg} = UserOperations.view_user(user.id)
+      assert msg[:ver_usuario] =~ "Mateo"
+      assert msg[:ver_usuario] =~ "2000-02-01"
+    end
+
+    test "fails when user not found" do
+      {:error, msg} = UserOperations.view_user(9999)
+      assert msg[:view_user] =~ "Usuario con ID 9999 no encontrado"
     end
   end
 end
