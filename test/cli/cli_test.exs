@@ -1,11 +1,10 @@
 
 defmodule CliTest do
-  use ExUnit.Case
   import Ledger.CLI
   use Ledger.RepoCase
   import ExUnit.CaptureIO
 
-  alias Ledger.Users
+  alias Ledger.{TransactionOperations, Transaction, Repo, Users, Money, UserOperations, MoneyOperations}
 
   describe "commands to list" do
     test ":help returned by option parsing with -h and --help options" do
@@ -100,20 +99,131 @@ defmodule CliTest do
     end
   end
 
-  describe "process/1 for create_user" do
-    test "calls create_user and prints confirmation" do
+    describe "process/1 user commands" do
+    test "crear_usuario" do
       output = capture_io(fn ->
-      Ledger.CLI.process({"crear_usuario", "sofia", "2000-01-01"})
+        Ledger.CLI.process({"crear_usuario", "sofia", "2000-01-01"})
       end)
 
-      assert String.contains?(output, "User created successfully")
+      assert String.contains?(output, "crear_usuario: Usuario creado correctamente")
 
-
-      # Verificamos que realmente se insertó en la DB
-      user= Repo.get_by(Users, username: "sofia")
+      user = Repo.get_by!(Users, username: "sofia")
       assert user.username == "sofia"
       assert user.birth_date == ~D[2000-01-01]
     end
+
+    test "editar_usuario" do
+      user = Repo.insert!(%Users{username: "ana", birth_date: ~D[1995-05-05]})
+      output = capture_io(fn ->
+        Ledger.CLI.process({"editar_usuario", Integer.to_string(user.id), "anna"})
+      end)
+
+      assert String.contains?(output, "editar_usuario: Usuario editado correctamente")
+
+      updated_user = Repo.get!(Users, user.id)
+      assert updated_user.username == "anna"
+    end
+
+    test "borrar_usuario" do
+      user = Repo.insert!(%Users{username: "carlos", birth_date: ~D[1990-01-01]})
+      output = capture_io(fn ->
+        Ledger.CLI.process({"borrar_usuario", Integer.to_string(user.id)})
+      end)
+
+      assert String.contains?(output, "borrar_usuario: Usuario borrado correctamente\n")
+      assert Repo.get(Users, user.id) == nil
+    end
+
+      test "ver_usuario" do
+        {:ok, user} = Ledger.UserOperations.create_user("sofia", "2000-01-01")
+        {:ok, result} = Ledger.UserOperations.view_user(user.id)
+
+        assert result =~ "username: sofia"
+        assert result =~ "birth_date: 2000-01-01"
+      end
+
+  end
+  describe "process/1 money commands" do
+    test "crear_moneda" do
+      output = capture_io(fn ->
+        Ledger.CLI.process({"crear_moneda", "BTC", "50000.0"})
+      end)
+      assert String.contains?(output, "crear_moneda: Moneda creada correctamente")
+    end
+
+    test "editar_moneda" do
+      {:ok, money} = MoneyOperations.create_money("ETH", "3000.0")
+      output = capture_io(fn ->
+        Ledger.CLI.process({"editar_moneda", Integer.to_string(money.id), "3500.0"})
+      end)
+      assert String.contains?(output, "editar_moneda: Moneda editada correctamente")
+    end
+
+    test "borrar_moneda" do
+      {:ok, money} = MoneyOperations.create_money("DOGE", "0.1")
+      output = capture_io(fn ->
+        Ledger.CLI.process({"borrar_moneda", Integer.to_string(money.id)})
+      end)
+      assert String.contains?(output, "borrar_moneda: Moneda eliminada correctamente")
+    end
+
+    test "ver_moneda" do
+      {:ok, money} = MoneyOperations.create_money("LTC", "150.0")
+      output = capture_io(fn ->
+        Ledger.CLI.process({"ver_moneda", Integer.to_string(money.id)})
+      end)
+      assert String.contains?(output, "ver_moneda: #{money.name}")
+    end
   end
 
+  describe "process/1 account and transaction commands" do
+    setup do
+      user = Repo.insert!(%Users{username: "juan", birth_date: ~D[1990-01-01]})
+      {:ok, user: user}
+    end
+
+    test "alta_cuenta", %{user: user} do
+      {:ok, money} = MoneyOperations.create_money("BTC", "50000.0")
+      output = capture_io(fn ->
+        Ledger.CLI.process({"alta_cuenta", Integer.to_string(user.id), Integer.to_string(money.id), "100"})
+      end)
+      assert String.contains?(output, "alta_cuenta: Cuenta creada correctamente")
+    end
+
+    test "realizar_transferencia", %{user: user} do
+      {:ok, money} = MoneyOperations.create_money("ETH", "3000.0")
+      recipient = Repo.insert!(%Users{username: "ana", birth_date: ~D[1995-05-05]})
+      TransactionOperations.create_high_account(user.id, money.id, "100")
+      output = capture_io(fn ->
+        Ledger.CLI.process({"realizar_transferencia", Integer.to_string(user.id), Integer.to_string(recipient.id), Integer.to_string(money.id), "50"})
+      end)
+      assert String.contains?(output, "realizar_transferencia: Transferencia realizada correctamente")
+    end
+
+    test "realizar_swap", %{user: user} do
+      {:ok, btc} = MoneyOperations.create_money("BTC", "50000.0")
+      {:ok, eth} = MoneyOperations.create_money("ETH", "3000.0")
+      TransactionOperations.create_high_account(user.id, btc.id, "10")
+      output = capture_io(fn ->
+        Ledger.CLI.process({"realizar_swap", Integer.to_string(user.id), Integer.to_string(btc.id), Integer.to_string(eth.id), "5"})
+      end)
+      assert String.contains?(output, "realizar_swap: Swap realizado correctamente")
+    end
+
+    test "deshacer_transaccion" do
+      {:ok, tx} = TransactionOperations.transfer(1, 2, 1, "50") # IDs de ejemplo
+      output = capture_io(fn ->
+        Ledger.CLI.process({"deshacer_transaccion", Integer.to_string(tx.id)})
+      end)
+      assert String.contains?(output, "deshacer_transaccion: Transacción deshecha correctamente")
+    end
+
+    test "ver_transaccion" do
+      {:ok, tx} = TransactionOperations.transfer(1, 2, 1, "50")
+      output = capture_io(fn ->
+        Ledger.CLI.process({"ver_transaccion", Integer.to_string(tx.id)})
+      end)
+      assert String.contains?(output, "ver_transaccion: Transacción")
+    end
+  end
 end
