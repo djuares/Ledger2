@@ -67,7 +67,7 @@ defmodule Ledger.TransactionOperations do
   end
 end
 
-defp realizar_transferencia(origin_account_id, destination_account_id, currency_id, amount) do
+def realizar_transferencia(origin_account_id, destination_account_id, currency_id, amount) do
   attrs = %{
     type: "transfer",
     amount: amount,
@@ -96,7 +96,7 @@ defp realizar_transferencia(origin_account_id, destination_account_id, currency_
   end
 end
 
-defp cuentas_dadas_de_alta?(origin_account_id, destination_account_id) do
+def cuentas_dadas_de_alta?(origin_account_id, destination_account_id) do
   origen_alta? =
     Repo.exists?(
       from t in Transaction,
@@ -116,7 +116,7 @@ defp cuentas_dadas_de_alta?(origin_account_id, destination_account_id) do
   origen_alta? and destino_alta?
 end
 
-defp parse_balance_string(balance_str) do
+def parse_balance_string(balance_str) do
   balance_str
   |> String.split("\n", trim: true)
   |> Enum.map(fn line ->
@@ -126,7 +126,7 @@ defp parse_balance_string(balance_str) do
   |> Enum.into(%{})
 end
 
-defp saldo_suficiente?(balance_map, currency_id, amount) do
+def saldo_suficiente?(balance_map, currency_id, amount) do
   case Ledger.Repo.get(Ledger.Money, currency_id) do
     nil ->
       IO.puts("❌ No se encontró la moneda con ID #{currency_id} en la base de datos")
@@ -227,7 +227,7 @@ def undo_transaction(transaction_id) do
       end
   end
 end
-defp has_later_transactions?(%Transaction{} = tx) do
+def has_later_transactions?(%Transaction{} = tx) do
   count =
     from(t in Transaction,
       where:
@@ -238,13 +238,13 @@ defp has_later_transactions?(%Transaction{} = tx) do
 
   count > 0
 end
-defp undo_high_account(%Transaction{id: id} = tx) do
+def undo_high_account(%Transaction{id: id} = tx) do
   Repo.delete(tx)
   {:ok, undo: "Alta de cuenta deshecha correctamente"}
 end
 
 
-  defp can_undo?(%Transaction{} = tx) do
+def can_undo?(%Transaction{} = tx) do
     last_for_origin =
       from(t in Transaction,
         where: t.origin_account_id == ^tx.origin_account_id,
@@ -268,7 +268,7 @@ end
     tx.id == last_for_origin.id and tx.id == last_for_destination.id
   end
 
-  defp undo_transfer(%Transaction{} = tx) do
+  def undo_transfer(%Transaction{} = tx) do
 
   destination_str = to_string(tx.destination_account_id)
   origin_str = to_string(tx.origin_account_id)
@@ -278,7 +278,7 @@ end
   transfer(destination_str, origin_str, currency_str, amount_str)
 end
 
-  defp undo_swap(%Transaction{} = tx) do
+  def undo_swap(%Transaction{} = tx) do
     origin_str = to_string(tx.origin_account_id)
     dest_currency_str = to_string(tx.destination_currency_id)
     origin_currency_str = to_string(tx.origin_currency_id)

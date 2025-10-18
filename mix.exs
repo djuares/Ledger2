@@ -9,7 +9,12 @@ defmodule Ledger.MixProject do
       build_embedded: Mix.env == :prod,
       start_permanent: Mix.env == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
-      deps: deps()
+      deps: deps(),
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+      coveralls: :test,
+      "coveralls.html": :test
+    ]
 
     ]
   end
@@ -30,6 +35,7 @@ defp deps do
   [
     {:ecto_sql, "~> 3.11"},
     {:postgrex, "~> 0.19"},
+    {:excoveralls, "~> 0.16", only: :test}
   ]
 end
 
