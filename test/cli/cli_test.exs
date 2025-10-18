@@ -5,6 +5,74 @@ defmodule CliTest do
   import ExUnit.CaptureIO
   alias Ledger.{TransactionOperations, Transaction, Repo, Users, Money, UserOperations, MoneyOperations}
 
+  describe "args_to_internal_representation/1" do
+    test "convierte crear_usuario correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["crear_usuario"], [n: "Sofía", b: "2000-01-01"]})
+      assert result == {"crear_usuario", "Sofía", "2000-01-01"}
+    end
+
+    test "convierte editar_usuario correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["editar_usuario"], [id: "10", n: "Ana"]})
+      assert result == {"editar_usuario", "10", "Ana"}
+    end
+    test "convierte borrar_usuario correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["borrar_usuario"], [id: "3"]})
+      assert result == {"borrar_usuario", "3"}
+    end
+
+    test "convierte ver_usuario correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["ver_usuario"], [id: "8"]})
+      assert result == {"ver_usuario", "8"}
+    end
+
+    test "convierte crear_moneda correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["crear_moneda"], [n: "USD", p: "1.0"]})
+      assert result == {"crear_moneda", "USD", "1.0"}
+    end
+
+    test "convierte alta_cuenta correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["alta_cuenta"], [u: "1", m: "2", a: "500"]})
+      assert result == {"alta_cuenta", "1", "2", "500"}
+    end
+
+    test "convierte realizar_transferencia correctamente" do
+      result =
+        Ledger.CLI.args_to_internal_representation({["realizar_transferencia"], [o: "1", d: "2", m: "3", a: "100"]})
+
+      assert result == {"realizar_transferencia", "1", "2", "3", "100"}
+    end
+
+    test "convierte realizar_swap correctamente" do
+      result =
+        Ledger.CLI.args_to_internal_representation({["realizar_swap"], [u: "1", mo: "USD", md: "ARS", a: "100"]})
+
+      assert result == {"realizar_swap", "1", "USD", "ARS", "100"}
+    end
+
+    test "convierte deshacer_transaccion correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["deshacer_transaccion"], [id: "22"]})
+      assert result == {"deshacer_transaccion", "22"}
+    end
+
+    test "convierte ver_transaccion correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["ver_transaccion"], [id: "5"]})
+      assert result == {"ver_transaccion", "5"}
+    end
+
+    test "convierte balance correctamente" do
+      result = Ledger.CLI.args_to_internal_representation({["balance"], [c1: "10", m: "USD"]})
+      assert result == {"balance", "10", "USD"}
+    end
+
+    test "convierte transacciones con valores por defecto" do
+      result = Ledger.CLI.args_to_internal_representation({["transacciones"], []})
+      assert result == {"transacciones", "0", "0"}
+    end
+
+    test "retorna :help para comando desconocido" do
+      assert Ledger.CLI.args_to_internal_representation({["desconocido"], []}) == :help
+    end
+  end
   describe "commands to list" do
     test ":help returned by option parsing with -h and --help options" do
       assert parse_args(["-h",     "anything"]) == :help
@@ -84,6 +152,10 @@ defmodule CliTest do
       assert parse_args(["realizar_swap", "-u=4", "-mo=2", "-md=3", "-a=100"]) ==
              {"realizar_swap", "4", "2", "3", "100"}
     end
+    test "parse make_swap cambiado de orden" do
+      assert parse_args(["realizar_swap", "-md=3", "-a=100", "-u=4", "-mo=2"]) ==
+             {"realizar_swap", "4", "2", "3", "100"}
+    end
 
     test "parse undo_transaction" do
       assert parse_args(["deshacer_transaccion", "-id=12"]) ==
@@ -94,7 +166,8 @@ defmodule CliTest do
       assert parse_args(["ver_transaccion", "-id=12"]) ==
              {"ver_transaccion", "12"}
     end
-  end
+
+end
 
 describe "CLI.process/1" do
   setup do
@@ -134,9 +207,11 @@ describe "CLI.process/1" do
     assert user.username == "luciana"
   end
 
-  test "borrar_usuario elimina usuario sin transacciones", %{users: {user1, _}} do
-    Ledger.CLI.process({"borrar_usuario", user1.id})
-    user = Repo.get(Users, user1.id)
+  test "borrar_usuario elimina usuario", %{users: {user1, _}} do
+    Ledger.CLI.process({"crear_usuario", "Gloria", "1995-05-05"})
+    user = Repo.get_by(Users, username: "Gloria")
+    Ledger.CLI.process({"borrar_usuario", user.id})
+    user = Repo.get(Users, user.id)
     assert user == nil
   end
 
@@ -205,6 +280,24 @@ describe "CLI.process/1" do
   assert Repo.get_by(Users, username: "") == nil
 end
 
+test "transferencia exitosa", %{users: {u1, u2}, money: {m1, _}} do
+    Ledger.CLI.process({"alta_cuenta", u1.id, m1.id, 500})
+    Ledger.CLI.process({"alta_cuenta", u2.id, m1.id, 500})
+    Ledger.CLI.process({"realizar_transferencia", to_string(u1.id), to_string(u2.id), to_string(m1.id), Float.to_string(200.0)})
+
+    tx = Repo.get_by(Transaction,
+        type: "transfer",
+        origin_account_id: u1.id,
+        destination_account_id: u2.id,
+        origin_currency_id: m1.id,
+        amount: 200
+      )
+      assert tx != nil
+      assert tx.origin_account_id == u1.id
+      assert tx.destination_account_id == u2.id
+      assert tx.amount == 200
+    end
+
 test "transferencia con monto mayor al saldo no se crea", %{users: {user1, user2}, money: {money1, _}} do
   Ledger.CLI.process({"alta_cuenta", user1.id, money1.id, 50})
   Ledger.CLI.process({"realizar_transferencia", user1.id, user2.id, money1.id, 1000})
@@ -212,8 +305,10 @@ test "transferencia con monto mayor al saldo no se crea", %{users: {user1, user2
   assert tx == nil
 end
 
-test "borrar moneda con transacciones existentes no la elimina", %{users: {user1, _}, money: {money1, _}} do
-  Ledger.CLI.process({"alta_cuenta", user1.id, money1.id, 100})
+test "borrar moneda con transacciones existentes no la elimina", %{users: {user1,user2}, money: {money1, _}} do
+  Ledger.CLI.process({"alta_cuenta", user1.id, money1.id, 500})
+  Ledger.CLI.process({"alta_cuenta", user2.id, money1.id, 500})
+  Ledger.CLI.process({"realizar_transferencia", user1.id, user2.id, money1.id, 100})
   Ledger.CLI.process({"borrar_moneda", money1.id})
   money = Repo.get(Money, money1.id)
   assert money != nil
@@ -228,13 +323,16 @@ end
 
 test "borrar usuario con transacciones no permite eliminarlo", %{users: {user1, user2}, money: {money1, _}} do
   # Primero, crear una transacción asociada al usuario
-  {:ok, _tx} = Ledger.TransactionOperations.create_high_account(user1.id, money1.id, 100)
-
+  Ledger.CLI.process({"crear_usuario", "Gloria", "1995-05-05"})
+  user = Repo.get_by(Users, username: "Gloria")
+  Ledger.CLI.process({"alta_cuenta", user.id, money1.id, 500})
+  Ledger.CLI.process({"alta_cuenta", user1.id, money1.id, 500})
+  Ledger.CLI.process({"realizar_transferencia", user.id, user1.id, money1.id, 100})
   # Intentar borrar al usuario con transacciones
-  result = Ledger.CLI.process({"borrar_usuario", user1.id})
+  result = Ledger.CLI.process({"borrar_usuario", user.id})
 
   # Verificar que devuelve un error y no borra al usuario
-  assert Repo.get(Users, user1.id) != nil
+  assert Repo.get(Users, user.id) != nil
 end
 test "realizar swap exitoso actualiza transacciones", %{users: {user, _}, money: {money1, money2}} do
   # Primero, dar alta de cuenta con ambas monedas
@@ -350,5 +448,42 @@ test "undo de swap elimina correctamente la transacción", %{users: {user1, _}, 
     end)
     assert output =~"{:error, undo: Transacción no encontrada}\n"
   end
-end
+
+  test "ver_usuario muestra información correcta", %{users: {user1, _}, money: {money1, _}} do
+    Ledger.CLI.process({"crear_usuario", "Gloria", "1995-05-05"})
+    user = Repo.get_by(Users, username: "Gloria")
+    output = capture_io(fn -> Ledger.CLI.process({"ver_usuario", user.id}) end)
+    assert output =~ "id= #{user.id}"
   end
+end
+   describe "decode_response/1" do
+    test "devuelve string con clave y valor cuando es {:ok, body}" do
+      body = [mensaje: "Operación exitosa"]
+      result = Ledger.CLI.decode_response({:ok, body})
+      assert result == "mensaje: Operación exitosa"
+    end
+
+    test "devuelve string con {:error, clave: valor} cuando es {:error, reason}" do
+      reason = [error: "Usuario no encontrado"]
+      result = Ledger.CLI.decode_response({:error, reason})
+      assert result == "{:error, error: Usuario no encontrado}"
+    end
+
+    test "maneja correctamente una lista con varios pares clave-valor (usa el primero)" do
+      body = [clave1: "valor1", clave2: "valor2"]
+      result = Ledger.CLI.decode_response({:ok, body})
+      assert result == "clave1: valor1"
+    end
+    test "maneja keyword con valor numérico" do
+  result = Ledger.CLI.decode_response({:ok, [balance: 123.45]})
+  assert result == "balance: 123.45"
+end
+
+    test "maneja keyword con atom" do
+      result = Ledger.CLI.decode_response({:ok, [estado: :ok]})
+      assert result == "estado: ok"
+    end
+
+  end
+
+end
