@@ -11,16 +11,11 @@ $ ./ledger --help
 ## Comando tp1
     ```bash
     $ ./ledger transaction [opciones]
-    ```
-    ```bash
+    
     $ ./ledger transaction -c1=<account> -c2=<account> 
-    ```
-    ```bash
-    ```
-    ```bash
+
     $ ./ledger balance -c1=<account> [opcion]
-    ```
-    ```bash
+
     $ ./ledger balance -c1=<account> -m=<money_type>
     ```
 
@@ -41,13 +36,13 @@ $ ./ledger --help
         ./ledger realizar_swap -u=<user-id> -mo=<money-id-origin> -md=<money-id-destine> -a=<amount>
         ./ledger deshacer_transaccion -id=<transaction-id>
         ./ledger ver_transaccion -id=<transaction-id>
- ```
- 
+    ```
+
 # Ejecutar tests
     ```bash
     $ mix test 
-    ```
-    Test coverage
-    ```bash
+
+    #Test coverage
+
     $ mix test --cover
     ```
