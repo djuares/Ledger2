@@ -26,6 +26,11 @@ db-init:
 	MIX_ENV=dev mix ecto.create
 	MIX_ENV=test mix ecto.create
 
+# Migrar ambas bases (dev y test)
+db-migrate-all:
+	MIX_ENV=dev mix ecto.migrate
+	MIX_ENV=test mix ecto.migrate
+
 # Reset completo (drop + create + migrate) para dev y test
 db-reset:
 	MIX_ENV=dev mix ecto.drop
@@ -36,5 +41,5 @@ db-reset:
 	MIX_ENV=test mix ecto.migrate
 
 # Setup completo para un nuevo desarrollador
-setup: up deps db-init db-migrate
+setup: up deps db-init db-migrate-all
 	@echo "✅ Setup completado. Ahora podés ejecutar: mix test --cover"
