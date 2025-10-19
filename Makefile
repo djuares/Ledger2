@@ -3,7 +3,7 @@ MIX_ENV ?= dev
 
 # Levantar contenedores de Docker
 up:
-	docker-compose up -d
+	docker-compose up -d --force-recreate
 
 # Parar contenedores
 down:
