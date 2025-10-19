@@ -9,7 +9,7 @@ $ make setup
 $ ./ledger --help
 ```
 ## Comando tp1
-    ```bash
+```bash
     $ ./ledger transaction [opciones]
     
     $ ./ledger transaction -c1=<account> -c2=<account> 
@@ -17,10 +17,10 @@ $ ./ledger --help
     $ ./ledger balance -c1=<account> [opcion]
 
     $ ./ledger balance -c1=<account> -m=<money_type>
-    ```
+```
 
 ## Comandos tp2
-    ```bash
+```bash
     ./ledger crear_usuario -n=<username> -b=<birth_date>
         ./ledger editar_usuario -id=<user-id> -n=<new-username>
         ./ledger borrar_usuario -id=<user-id>
@@ -36,13 +36,13 @@ $ ./ledger --help
         ./ledger realizar_swap -u=<user-id> -mo=<money-id-origin> -md=<money-id-destine> -a=<amount>
         ./ledger deshacer_transaccion -id=<transaction-id>
         ./ledger ver_transaccion -id=<transaction-id>
-    ```
+```
 
 # Ejecutar tests
-    ```bash
+```bash
     $ mix test 
 
     #Test coverage
 
     $ mix test --cover
-    ```
+```
