@@ -1,27 +1,27 @@
 # Ejecución de la Aplicación
 ```bash
-$ make setup
+ make setup
 ```
 
 # Ejecución del Programa
 ```bash
 # Ejecutar con ayuda
-$ ./ledger --help
+ ./ledger --help
 ```
 ## Comando tp1
 ```bash
-    $ ./ledger transaction [opciones]
+     ./ledger transaction [opciones]
     
-    $ ./ledger transaction -c1=<account> -c2=<account> 
+     ./ledger transaction -c1=<account> -c2=<account> 
 
-    $ ./ledger balance -c1=<account> [opcion]
+     ./ledger balance -c1=<account> [opcion]
 
-    $ ./ledger balance -c1=<account> -m=<money_type>
+     ./ledger balance -c1=<account> -m=<money_type>
 ```
 
 ## Comandos tp2
 ```bash
-    ./ledger crear_usuario -n=<username> -b=<birth_date>
+        ./ledger crear_usuario -n=<username> -b=<birth_date>
         ./ledger editar_usuario -id=<user-id> -n=<new-username>
         ./ledger borrar_usuario -id=<user-id>
         ./ledger ver_usuario -id=<user-id>
@@ -40,9 +40,9 @@ $ ./ledger --help
 
 # Ejecutar tests
 ```bash
-    $ mix test 
+     mix test 
 
     #Test coverage
 
-    $ mix test --cover
+     mix test --cover
 ```
