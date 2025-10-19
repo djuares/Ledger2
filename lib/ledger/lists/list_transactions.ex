@@ -22,13 +22,11 @@ defmodule Ledger.ListTransactions do
     end
   end
 
-  # Función auxiliar para capturar errores de Repo.all
   def fetch_transactions(query) do
     try do
       {:ok, Repo.all(query)}
     rescue
-      e in DBConnection.ConnectionError -> {:error, "Error en la base de datos: #{e.message}"}
-      e -> {:error, "Error inesperado: #{inspect(e)}"}
+      _ -> {:error, "Error con la base de datos}"}
     end
   end
 

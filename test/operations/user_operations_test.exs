@@ -1,6 +1,6 @@
 defmodule Ledger.UserOperationsTest do
   use Ledger.RepoCase
-  alias Ledger.{UserOperations, Repo, Users, Money, Transaction}
+  alias Ledger.{UserOperations, Repo, Users, Money}
 
   describe "create_user/2" do
     test "creates a user successfully" do
@@ -43,7 +43,7 @@ end
 
   describe "edit_user/2" do
     setup do
-      {:ok, msg} = UserOperations.create_user("Mariano", "2004-02-01")
+      {:ok, _} = UserOperations.create_user("Mariano", "2004-02-01")
       user = Repo.get_by(Users, username: "Mateo")
       %{user: user}
     end

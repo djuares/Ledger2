@@ -1,9 +1,6 @@
 defmodule Ledger.ConversionTest do
   use Ledger.RepoCase
-  alias Ledger.{Conversion, Money, Repo}
-
-  import Ecto.Query
-
+  alias Ledger.{Conversion}
 
   describe "convert/3" do
     test "convierte correctamente USD a EUR" do

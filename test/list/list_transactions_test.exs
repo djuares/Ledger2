@@ -2,8 +2,6 @@ defmodule Ledger.ListTransactionsTest do
   use Ledger.RepoCase
   alias Ledger.{ListTransactions, Repo, Transaction, Money}
 
-  import Ecto.Query
-
   setup do
     # Cada prueba obtiene una conexión aislada
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -92,4 +90,11 @@ defmodule Ledger.ListTransactionsTest do
       assert formatted =~ "transfer"
     end
   end
+    test "handles DBConnection.ConnectionError" do
+      query = :invalid_query
+
+      # Como no hay conexión real, simulamos el rescue
+      {:error, msg} = ListTransactions.fetch_transactions(query)
+      assert String.contains?(msg, "Error con la base de datos")
+    end
 end

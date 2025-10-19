@@ -54,6 +54,12 @@ defmodule Ledger.AcreditTest do
       result = Acredit.acredit_balance(accs)
       assert result == %{}  # No se suma nada porque conversion falla
     end
+    test "ignora conversion fallida para swap" do
+      accs = ["1;2;DOGE;ETH;10;;;swap"]
+
+      result = Acredit.acredit_balance(accs)
+      assert result == %{}  # No se suma nada porque conversion falla
+    end
     test "acredita saldo con varias operaciones combinadas" do
       accs = [
         "1;2;BTC;;100;;;alta_cuenta",

@@ -63,7 +63,7 @@ defmodule Ledger.CLI do
   def args_to_internal_representation({["balance"], opts}) do
     if is_nil(opts[:c1]) do
       IO.puts(:stderr, "Falta un argumento requerido: -c1=<cuenta>")
-      System.halt(1)
+      {:error, "Falta un argumento requerido: -c1=<cuenta>"}
     else
       origin_account = opts[:c1]
       money_type = opts[:m] || @default[:money_type]

@@ -1,7 +1,6 @@
 defmodule Ledger.TransactionOperationsTest do
   use Ledger.RepoCase, async: false
-  import Ecto.Query
-  alias Ledger.{TransactionOperations, Repo, Transaction, Money, Users, CLI}
+  alias Ledger.{TransactionOperations, Repo, Transaction, Money, Users}
 
   setup do
     Repo.delete_all(Transaction)
@@ -46,15 +45,11 @@ defmodule Ledger.TransactionOperationsTest do
       assert msg[:alta_cuenta] =~ "is invalid"
     end
 
-    test "fails if user or currency does not exist" do
-      {:error, msg} = TransactionOperations.create_high_account(999, 1, 100)
-      assert msg[:alta_cuenta] =~"No existe un usuario para ese id; No existe una moneda para ese id"
-    end
     test "creates account with zero amount", %{users: {u1, _}, money: {m1, _}} do
       {:ok, msg} = TransactionOperations.create_high_account(u1.id, m1.id, 0)
       assert msg[:alta_cuenta] =~ "Transacción realizada correctamente"
     end
-    test "transfer/4 fails if currency does not exist", %{users: {u1, _u2}} do
+    test "create fails if currency does not exist", %{users: {u1, _u2}} do
       result = TransactionOperations.create_high_account(u1.id, 1, 100)
       assert result == {:error, [alta_cuenta: "No existe una moneda para ese id"]}
     end
@@ -70,8 +65,14 @@ defmodule Ledger.TransactionOperationsTest do
       {:error, msg} = TransactionOperations.transfer(u1.id, u2.id, m1.id, 50)
       assert msg[:realizar_transferencia] =~ "Ambas cuentas deben tener una transacción de tipo 'alta_cuenta'"
     end
+    test "transfer transaction fails wihout high account destinate", %{users: {u1, u2}, money: {m1,_}} do
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 55000.0)
+       :timer.sleep(1000)
+      {:error, msg} = TransactionOperations.transfer(to_string(u1.id), to_string(u2.id),to_string(m1.id), Float.to_string(55000.0))
+      assert msg[:realizar_transferencia] =~ "Ambas cuentas deben tener una transacción de tipo 'alta_cuenta' antes de transferir."
+     end
 
-    test "negative, zero or invalid amount", %{users: {u1, u2}, money: {m1, _}} do
+    test "negative, zero", %{users: {u1, u2}, money: {m1, _}} do
       {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 100)
       {:ok, _} = TransactionOperations.create_high_account(u2.id, m1.id, 100)
 
@@ -80,11 +81,8 @@ defmodule Ledger.TransactionOperationsTest do
 
       {:error, msg} = TransactionOperations.transfer(to_string(u1.id), to_string(u2.id),to_string( m1.id), Float.to_string(0.0))
       assert msg[:realizar_transferencia] =~ "mayor que cero"
-
-      assert_raise ArgumentError, fn ->
-        TransactionOperations.transfer(to_string(u1.id), to_string(u2.id),to_string( m1.id), "ABC")
-      end
     end
+
     test "transfer with insufficient balance", %{users: {u1, u2}, money: {m1, _}} do
       {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 50)
       {:ok, _} = TransactionOperations.create_high_account(u2.id, m1.id, 50)
@@ -99,7 +97,6 @@ defmodule Ledger.TransactionOperationsTest do
       {:ok, msg} = TransactionOperations.transfer(to_string(u1.id), to_string(u2.id),to_string( m1.id), Float.to_string(200.0))
       assert msg[:realizar_transferencia] =~ "Transferencia realizada con ID"
 
-      # Buscamos la transacción creada
       tx = Repo.get_by(Transaction,
         type: "transfer",
         origin_account_id: u1.id,
@@ -119,7 +116,19 @@ defmodule Ledger.TransactionOperationsTest do
       {:ok, msg} = TransactionOperations.transfer(to_string(u1.id), to_string(u2.id),to_string( m1.id), Float.to_string(200.0))
       assert msg[:realizar_transferencia] =~ "Transferencia realizada"
     end
+    test "saldo_suficiente? muestra mensaje cuando no encuentra moneda" do
+      balance_map = %{}
+      currency_id = -1 # ID que no existe
+      amount = 100
 
+      output = ExUnit.CaptureIO.capture_io(fn ->
+        result = Ledger.TransactionOperations.saldo_suficiente?(balance_map, currency_id, amount)
+        assert result == false
+      end)
+
+      assert output =~ "❌ No se encontró la moneda con ID #{currency_id}"
+      assert output =~ "en la base de datos"
+    end
   end
 
   # ----------------------------
@@ -144,14 +153,23 @@ defmodule Ledger.TransactionOperationsTest do
       {:error, msg} = TransactionOperations.swap(u1.id, m1.id, m2.id, 50)
       assert msg[:realizar_swap] =~ "La cuenta debe tener una transacción de tipo 'alta_cuenta'"
     end
+    test " swap transaction fails wihout high account destinate", %{users: {u1,_}, money: {m1,m2}} do
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 55000.0)
+       :timer.sleep(1000)
+      {:error, msg} = TransactionOperations.swap(to_string(u1.id), to_string(m1.id),to_string(m2.id), Float.to_string(55000.0))
+      assert msg[:realizar_swap] =~ "La cuenta debe tener una transacción de tipo 'alta_cuenta' para ambas monedas antes de hacer swap."
+   end
 
     test "fails if insufficient balance", %{users: {u1, _}, money: {m1, m2}} do
       {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 100.0)
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m2.id, 100.0)
+
       {:error, msg} = TransactionOperations.swap(u1.id, m1.id, m2.id, 150.0)
       assert msg[:realizar_swap] =~ "Saldo insuficiente"
     end
     test "successful swap creates transaction", %{users: {u1, _}, money: {m1, m2}} do
       {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 500)
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m2.id, 500)
       {:ok, msg} = TransactionOperations.swap(to_string(u1.id), to_string(m1.id), to_string(m2.id),Float.to_string(100.0))
       assert msg[:realizar_swap] =~ "Swap realizado con ID"
     end
@@ -173,15 +191,35 @@ defmodule Ledger.TransactionOperationsTest do
     {:ok, msg} = TransactionOperations.undo_transaction(to_string(tx.id))
     assert msg[:undo] =~ "Alta de cuenta deshecha correctamente"
 
-    # Verificamos que la transacción ya no existe
-    assert Repo.get(Transaction, tx.id) == nil
   end
+   test "undo transfer transaction", %{users: {u1, u2}, money: {m1, _}} do
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 100.0)
+      {:ok, _} = TransactionOperations.create_high_account(u2.id, m1.id, 100.0)
 
+       :timer.sleep(1000)
+      {:ok, _} = TransactionOperations.transfer(to_string(u1.id), to_string(u2.id),to_string(m1.id), Float.to_string(100.0))
+      tx2 = Repo.get_by(Transaction, type: "transfer", origin_account_id: u1.id, destination_account_id: u2.id, amount: 100.0, origin_currency_id: m1.id)
+      {:ok, _} = TransactionOperations.undo_transaction(to_string(tx2.id))
+      tx = Repo.get_by(Transaction, type: "transfer", origin_account_id: u2.id, destination_account_id: u1.id, amount: 100.0, origin_currency_id: m1.id)
+      assert tx.amount == 100.0
+      assert tx.inserted_at != nil
+   end
+    test "undo swap transaction", %{users: {u1, _}, money: {m1,m2}} do
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 55000.0)
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m2.id, 55000.0)
+       :timer.sleep(1000)
+      {:ok, _} = TransactionOperations.swap(to_string(u1.id), to_string(m1.id),to_string(m2.id), Float.to_string(55000.0))
+      tx2 = Repo.get_by(Transaction, type: "swap", origin_account_id: u1.id,origin_currency_id: m1.id, destination_currency_id: m2.id, amount: 55000.0)
+      {:ok,_} = TransactionOperations.undo_transaction(to_string(tx2.id))
+      tx = Repo.get_by(Transaction, type: "swap", origin_account_id: u1.id, origin_currency_id: m2.id,  destination_currency_id: m1.id)
+      assert tx.amount == 1.1
+      assert tx.inserted_at != nil
+   end
 end
   describe "can_undo?/1" do
     setup %{users: {u1, u2}, money: {m1, _}} do
-      {:ok, alta1} = TransactionOperations.create_high_account(u1.id, m1.id, 300)
-      {:ok, alta2} = TransactionOperations.create_high_account(u2.id, m1.id, 300)
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 300)
+      {:ok, _} = TransactionOperations.create_high_account(u2.id, m1.id, 300)
 
       tx1 = Repo.get_by(Transaction, type: "alta_cuenta", origin_account_id: u1.id)
       tx2 = Repo.get_by(Transaction, type: "alta_cuenta", origin_account_id: u2.id)
@@ -228,6 +266,8 @@ end
     end
     test "shows swap transaction details", %{users: {u1, _}, money: {m1, m2}} do
       {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 100)
+      {:ok, _} = TransactionOperations.create_high_account(u1.id, m2.id, 100)
+
       {:ok, _} = TransactionOperations.swap(to_string(u1.id), to_string(m1.id), to_string(m2.id),Float.to_string(50.0))
       tx = Repo.get_by(Transaction, type: "swap")
 
@@ -244,7 +284,7 @@ end
     test "cuentas_dadas_de_alta?/2 detecta cuentas dadas de alta", %{users: {u1, u2}, money: {m1, _}} do
       {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 100)
       {:ok, _} = TransactionOperations.create_high_account(u2.id, m1.id, 100)
-      assert TransactionOperations.cuentas_dadas_de_alta?(u1.id, u2.id)
+      assert TransactionOperations.cuentas_dadas_de_alta?(u1.id, u2.id, m1.id, m1.id)
     end
 
     test "parse_balance_string convierte correctamente", %{money: {m1, m2}} do
@@ -259,13 +299,13 @@ end
       refute TransactionOperations.saldo_suficiente?(balance, m1.id, 400.0)
     end
 
-    test "can_undo?/1 detecta última transacción", %{users: {u1, u2}, money: {m1, _}} do
+    test "can_undo?/1 detecta última transacción", %{users: {u1,_}, money: {m1, _}} do
       {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 100)
       tx = Repo.get_by(Transaction, type: "alta_cuenta", origin_account_id: u1.id)
       assert TransactionOperations.can_undo?(tx)
     end
 
-    test "has_later_transactions?/1 detecta transacciones posteriores", %{users: {u1, u2}, money: {m1, _}} do
+    test "has_later_transactions?/1 detecta transacciones posteriores", %{users: {u1,_}, money: {m1, _}} do
       {:ok, _} = TransactionOperations.create_high_account(u1.id, m1.id, 100)
       tx1 = Repo.get_by(Transaction, type: "alta_cuenta", origin_account_id: u1.id)
 

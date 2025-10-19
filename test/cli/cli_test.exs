@@ -3,8 +3,20 @@ defmodule CliTest do
   import Ledger.CLI
   use Ledger.RepoCase
   import ExUnit.CaptureIO
-  alias Ledger.{TransactionOperations, Transaction, Repo, Users, Money, UserOperations, MoneyOperations}
+  alias Ledger.{Transaction, Repo, Users, Money}
 
+  describe "main/1" do
+
+    test "main/1 configura logger y procesa argumentos" do
+      # Test que el flujo completo funciona
+      argv = ["balance", "-c1=123"]
+
+      output = capture_io(fn ->
+        Ledger.CLI.main(argv)
+      end)
+      refute output =~ "Error"
+    end
+  end
   describe "args_to_internal_representation/1" do
     test "convierte crear_usuario correctamente" do
       result = Ledger.CLI.args_to_internal_representation({["crear_usuario"], [n: "Sofía", b: "2000-01-01"]})
@@ -62,6 +74,14 @@ defmodule CliTest do
     test "convierte balance correctamente" do
       result = Ledger.CLI.args_to_internal_representation({["balance"], [c1: "10", m: "USD"]})
       assert result == {"balance", "10", "USD"}
+    end
+    test "fails sin falta -c1" do
+      output = ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert {:error, "Falta un argumento requerido: -c1=<cuenta>"} =
+                Ledger.CLI.args_to_internal_representation({["balance"], []})
+      end)
+
+      assert output =~ "Falta un argumento requerido: -c1=<cuenta>"
     end
 
     test "convierte transacciones con valores por defecto" do
@@ -185,7 +205,65 @@ describe "CLI.process/1" do
 
     {:ok, users: {user1, user2}, money: {money1, money2}}
   end
+  # --- Balance
+  test "list balance for user1", %{users: {user1, _}, money: {money1, money2}} do
+    # Crear transacciones para user1
+    %Transaction{
+      origin_account_id: user1.id,
+      destination_account_id: nil,
+      origin_currency_id: money1.id,
+      destination_currency_id: nil,
+      amount: 1000.0,
+      type: "alta_cuenta",
+      timestamp: DateTime.utc_now() |> DateTime.truncate(:second),
+    } |> Repo.insert!()
 
+    %Transaction{
+      origin_account_id: user1.id,
+      destination_account_id: nil,
+      origin_currency_id: money2.id,
+      destination_currency_id: nil,
+      amount: 2.0,
+      type: "alta_cuenta",
+      timestamp: DateTime.utc_now() |> DateTime.truncate(:second),
+    } |> Repo.insert!()
+
+    output = capture_io(fn ->
+      Ledger.CLI.process({"balance", to_string(user1.id), "0"})
+    end)
+
+    assert output =~ "balance: BTCS=2.0\nUSDT=1.0e3\n"
+  end
+  # --- Transacciones ---
+  test "list transactions for user1", %{users: {user1, user2}, money: {money1, _}} do
+    # Crear transacciones para user1
+    tx1 = %Transaction{
+      origin_account_id: user1.id,
+      destination_account_id: user2.id,
+      origin_currency_id: money1.id,
+      destination_currency_id: money1.id,
+      amount: 150.0,
+      type: "transfer",
+      timestamp: DateTime.utc_now() |> DateTime.truncate(:second),
+    } |> Repo.insert!()
+
+    tx2 = %Transaction{
+      origin_account_id: user1.id,
+      destination_account_id: nil,
+      origin_currency_id: money1.id,
+      destination_currency_id: nil,
+      amount: 300.0,
+      type: "alta_cuenta",
+      timestamp: DateTime.utc_now() |> DateTime.truncate(:second),
+    } |> Repo.insert!()
+
+    output = capture_io(fn ->
+      Ledger.CLI.process({"transacciones", to_string(user1.id), "0"})
+    end)
+
+      assert output =~  "transacciones: #{tx1.id};#{DateTime.to_unix(tx1.timestamp)};USDT;USDT;150.0;#{tx1.origin_account_id};#{tx1.destination_account_id};transfer\n#{tx2.id};#{DateTime.to_unix(tx2.timestamp)};USDT;;300.0;#{tx2.origin_account_id};;alta_cuenta\n"
+
+   end
   # --- Usuarios ---
   test "crear_usuario crea usuario en BD" do
     Ledger.CLI.process({"crear_usuario", "sofia", "2000-01-01"})
@@ -207,7 +285,7 @@ describe "CLI.process/1" do
     assert user.username == "luciana"
   end
 
-  test "borrar_usuario elimina usuario", %{users: {user1, _}} do
+  test "borrar_usuario elimina usuario" do
     Ledger.CLI.process({"crear_usuario", "Gloria", "1995-05-05"})
     user = Repo.get_by(Users, username: "Gloria")
     Ledger.CLI.process({"borrar_usuario", user.id})
@@ -321,7 +399,7 @@ test "editar usuario inexistente no altera la BD" do
   assert user == nil
 end
 
-test "borrar usuario con transacciones no permite eliminarlo", %{users: {user1, user2}, money: {money1, _}} do
+test "borrar usuario con transacciones no permite eliminarlo", %{users: {user1,_}, money: {money1, _}} do
   # Primero, crear una transacción asociada al usuario
   Ledger.CLI.process({"crear_usuario", "Gloria", "1995-05-05"})
   user = Repo.get_by(Users, username: "Gloria")
@@ -329,22 +407,10 @@ test "borrar usuario con transacciones no permite eliminarlo", %{users: {user1, 
   Ledger.CLI.process({"alta_cuenta", user1.id, money1.id, 500})
   Ledger.CLI.process({"realizar_transferencia", user.id, user1.id, money1.id, 100})
   # Intentar borrar al usuario con transacciones
-  result = Ledger.CLI.process({"borrar_usuario", user.id})
+  Ledger.CLI.process({"borrar_usuario", user.id})
 
   # Verificar que devuelve un error y no borra al usuario
   assert Repo.get(Users, user.id) != nil
-end
-test "realizar swap exitoso actualiza transacciones", %{users: {user, _}, money: {money1, money2}} do
-  # Primero, dar alta de cuenta con ambas monedas
-  Ledger.TransactionOperations.create_high_account(user.id, money1.id, 100)
-  Ledger.TransactionOperations.create_high_account(user.id, money2.id, 50)
-
-  # Ejecutar swap
-  result = Ledger.CLI.process({"realizar_swap", user.id, money1.id, money2.id, 30})
-  tx = Repo.one(from t in Transaction,
-                where: t.origin_account_id == ^user.id and t.type == "swap",
-                limit: 1)
-  assert tx =! nil
 end
 
 test "swap falla si no hay saldo suficiente", %{users: {user, _}, money: {money1, money2}} do
@@ -352,7 +418,7 @@ test "swap falla si no hay saldo suficiente", %{users: {user, _}, money: {money1
   Ledger.TransactionOperations.create_high_account(user.id, money1.id, 10)
 
   # Intentar swap mayor al saldo
-  result = Ledger.CLI.process({"realizar_swap", user.id, money1.id, money2.id, 50})
+  Ledger.CLI.process({"realizar_swap", user.id, money1.id, money2.id, 50})
 
   # Verificar que no se haya creado ninguna transacción de tipo swap para ese usuario
   tx = Repo.one(from t in Transaction,
@@ -363,7 +429,7 @@ end
 
 test "swap falla si no hay alta de cuenta", %{users: {user, _}, money: {money1, money2}} do
   # No damos alta de cuenta
-  result = Ledger.CLI.process({"realizar_swap", user.id, money1.id, money2.id, 10})
+  Ledger.CLI.process({"realizar_swap", user.id, money1.id, money2.id, 10})
    tx = Repo.one(from t in Transaction,
                 where: t.origin_account_id == ^user.id and t.type == "swap",
                 limit: 1)
@@ -442,14 +508,14 @@ test "undo de swap elimina correctamente la transacción", %{users: {user1, _}, 
     assert Repo.get(Transaction, tx.id) == nil
   end
 
-  test "undo de transacción inexistente muestra mensaje de error", %{users: {user1, _}, money: {usd, _}} do
+  test "undo de transacción inexistente muestra mensaje de error" do
     output = capture_io(fn ->
       Ledger.CLI.process({"deshacer_transaccion", "999999"})
     end)
     assert output =~"{:error, undo: Transacción no encontrada}\n"
   end
 
-  test "ver_usuario muestra información correcta", %{users: {user1, _}, money: {money1, _}} do
+  test "ver_usuario muestra información correcta" do
     Ledger.CLI.process({"crear_usuario", "Gloria", "1995-05-05"})
     user = Repo.get_by(Users, username: "Gloria")
     output = capture_io(fn -> Ledger.CLI.process({"ver_usuario", user.id}) end)

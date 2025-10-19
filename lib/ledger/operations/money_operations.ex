@@ -16,7 +16,7 @@ def create_money(money_name, usd_price) do
     {:error, changeset} ->
       message =
         changeset
-        |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+        |> Ecto.Changeset.traverse_errors(fn {msg, _} ->
           cond do
             String.contains?(msg, "should be at least") ->
               "El nombre debe tener entre 3 y 4 caracteres"

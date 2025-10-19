@@ -32,9 +32,6 @@ def list(origin_account, money_type) do
           {:ok, balance_map} ->
             balance_str = format_balance(balance_map)
             {:ok, balance: balance_str}
-
-          {:error, message} ->
-            {:error, balance: message}
         end
     end
   end
@@ -45,8 +42,7 @@ end
     try do
       {:ok, Repo.all(query)}
     rescue
-      e in DBConnection.ConnectionError -> {:error, "Error en la base de datos: #{e.message}"}
-      e -> {:error, "Error inesperado: #{inspect(e)}"}
+      _ -> {:error, "Error con la base de datos}"}
     end
   end
 
@@ -55,7 +51,6 @@ end
   end
 
   defp format_transactions(transactions) do
-  try do
     formatted =
       transactions
       |> Enum.map(fn t ->
@@ -70,11 +65,9 @@ end
       |> Enum.join("\n")
 
     {:ok, formatted}
-  rescue
-    e ->
-      {:error, "Error al formatear transacciones: #{inspect(e)}"}
+
   end
-end
+
   def process_content(content, origin_account, "0") do
   lines = content
     |> String.split("\n")
@@ -113,11 +106,7 @@ end
       {:ok, balance_map} ->
         case Ledger.Conversion.convert_all_balances(balance_map, money_type) do
           {:ok, converted_balance} -> {:ok, converted_balance}
-          {:error, message} -> {:error, message}
         end
-
-      {:error, message} ->
-        {:error, message}
     end
   end
 

@@ -54,7 +54,7 @@ defmodule Ledger.ListBalanceTest do
      transactions: [tx1, tx2, tx3]}
   end
 
-  test "list transactions and balances for user1", %{users: %{alice: user1}, money: %{usd: usd, btc: btc}} do
+  test "list transactions and balances for user1", %{users: %{alice: user1}} do
     {:ok, balance} = ListBalance.list(to_string(user1.id), "0")
     # saldo = alta_cuenta + transfer recibida - transfer enviada
     assert balance[:balance] =~ "BTCS=1.0\nUSDT=400.0"
@@ -102,12 +102,12 @@ defmodule Ledger.ListBalanceTest do
     assert Enum.any?(txs, fn t -> t.id == tx.id end)
   end)
 end
-    test "handles DBConnection.ConnectionError" do
+  test "handles DBConnection.ConnectionError" do
       query = :invalid_query
 
       # Como no hay conexión real, simulamos el rescue
       {:error, msg} = ListBalance.fetch_transactions(query)
-      assert String.contains?(msg, "Error inesperado")
+      assert String.contains?(msg, "Error con la base de datos")
     end
   end
 describe "combine_balances/2" do

@@ -2,7 +2,6 @@ defmodule Ledger.UsersTest do
   use Ledger.RepoCase
   alias Ledger.Users
   alias Ledger.Repo
-  import Ecto.Changeset
 
   describe "changeset/2" do
     test "creates a valid changeset for a correct user" do
