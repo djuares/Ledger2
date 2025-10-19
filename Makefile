@@ -1,19 +1,23 @@
 # Variables
 MIX_ENV ?= dev
 
-# Levantar contenedor de Postgres
+# Levantar contenedores de Docker
 up:
 	docker-compose up -d
 
-# Parar los contenedores
+# Parar contenedores
 down:
 	docker-compose down
 
-# Crear base de datos (para dev o test)
+# Instalar dependencias de Elixir
+deps:
+	mix deps.get
+
+# Crear base de datos (dev o test)
 db-create:
 	MIX_ENV=$(MIX_ENV) mix ecto.create
 
-# Migrar base de datos (para dev o test)
+# Migrar base de datos (dev o test)
 db-migrate:
 	MIX_ENV=$(MIX_ENV) mix ecto.migrate
 
@@ -22,7 +26,7 @@ db-init:
 	MIX_ENV=dev mix ecto.create
 	MIX_ENV=test mix ecto.create
 
-# Reset completo (borra y recrea)
+# Reset completo (drop + create + migrate) para dev y test
 db-reset:
 	MIX_ENV=dev mix ecto.drop
 	MIX_ENV=dev mix ecto.create
@@ -30,3 +34,7 @@ db-reset:
 	MIX_ENV=test mix ecto.drop
 	MIX_ENV=test mix ecto.create
 	MIX_ENV=test mix ecto.migrate
+
+# Setup completo para un nuevo desarrollador
+setup: up deps db-init db-migrate
+	@echo "✅ Setup completado. Ahora podés ejecutar: mix test --cover"
