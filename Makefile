@@ -40,6 +40,10 @@ db-reset:
 	MIX_ENV=test mix ecto.create
 	MIX_ENV=test mix ecto.migrate
 
+db-seed:
+	MIX_ENV=dev mix run priv/repo/seeds.exs
+	MIX_ENV=test mix run priv/repo/seeds.exs
+
 # Setup completo para un nuevo desarrollador
-setup: up deps db-init db-migrate-all
+setup: up deps db-init db-migrate-all  db-seed
 	@echo "✅ Setup completado. Ahora podés ejecutar: mix test --cover"

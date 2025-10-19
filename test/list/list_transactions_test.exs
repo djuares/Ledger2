@@ -1,6 +1,6 @@
 defmodule Ledger.ListTransactionsTest do
   use Ledger.RepoCase
-  alias Ledger.{ListTransactions, Repo, Transaction, Money}
+  alias Ledger.{ListTransactions, Repo, Transaction, Money, Users}
 
   setup do
     # Cada prueba obtiene una conexión aislada
@@ -19,14 +19,17 @@ defmodule Ledger.ListTransactionsTest do
 
     test "retorna transacciones filtradas correctamente" do
       # Creamos monedas
+      user1 = %Users{username: "Maria", birth_date: ~D[2000-01-01]} |> Repo.insert!()
+      user2 = %Users{username: "Victoria", birth_date: ~D[2000-02-01]} |> Repo.insert!()
+
       usd = Repo.insert!(%Money{name: "USDS", price: 1.0})
       eur = Repo.insert!(%Money{name: "EURS", price: 1.1})
 
       # Creamos transacciones
       tx1 =
         Repo.insert!(%Transaction{
-          origin_account_id: 1,
-          destination_account_id: 2,
+          origin_account_id: user1.id,
+          destination_account_id: user2.id,
           origin_currency_id: usd.id,
           destination_currency_id: usd.id,
           amount: 100.0,
@@ -34,10 +37,9 @@ defmodule Ledger.ListTransactionsTest do
           timestamp: DateTime.utc_now()|> DateTime.truncate(:second),
         })
 
-      tx2 =
-        Repo.insert!(%Transaction{
-          origin_account_id: 2,
-          destination_account_id: 1,
+      tx2 =Repo.insert!(%Transaction{
+          origin_account_id: user2.id,
+          destination_account_id: user1.id,
           origin_currency_id: eur.id,
           destination_currency_id: eur.id,
           amount: 50.0,
@@ -46,18 +48,8 @@ defmodule Ledger.ListTransactionsTest do
         })
 
       # Llamamos a la función filtrando por origen 1
-      {:ok, result} = ListTransactions.list(1, "0")
-      transacciones_str = result[:transacciones]
-
-      # Verificamos que contenga tx1
-      assert transacciones_str =~ Integer.to_string(tx1.id)
-      assert transacciones_str =~ "USDS"
-
-      # Verificamos que contenga tx2 si filtramos por destino 1
-      {:ok, result2} = ListTransactions.list("0", 1)
-      transacciones_str2 = result2[:transacciones]
-      assert transacciones_str2 =~ Integer.to_string(tx2.id)
-      assert transacciones_str2 =~ "EURS"
+      {:ok, result} = ListTransactions.list(user1.id, "0")
+      assert result[:transacciones] =~  "#{tx1.id};#{DateTime.to_unix(tx1.timestamp)};USDS;USDS;100.0;#{tx1.origin_account_id};#{tx1.destination_account_id};transfer"
     end
 
     test "build_filters genera filtros correctos" do
