@@ -8,7 +8,7 @@
 # Ejecutar con ayuda
  ./ledger --help
 ```
-## Comando tp1
+## Comandos tp1
 ```bash
      ./ledger transaction [opciones] 
      ./ledger transaction -c1=<account> -c2=<account> 
