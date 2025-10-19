@@ -23,7 +23,6 @@ defmodule Ledger.ListTransactionsTest do
       user2 = %Users{username: "Victoria", birth_date: ~D[2000-02-01]} |> Repo.insert!()
 
       usd = Repo.insert!(%Money{name: "USDS", price: 1.0})
-      eur = Repo.insert!(%Money{name: "EURS", price: 1.1})
 
       # Creamos transacciones
       tx1 =
@@ -33,16 +32,6 @@ defmodule Ledger.ListTransactionsTest do
           origin_currency_id: usd.id,
           destination_currency_id: usd.id,
           amount: 100.0,
-          type: "transfer",
-          timestamp: DateTime.utc_now()|> DateTime.truncate(:second),
-        })
-
-      tx2 =Repo.insert!(%Transaction{
-          origin_account_id: user2.id,
-          destination_account_id: user1.id,
-          origin_currency_id: eur.id,
-          destination_currency_id: eur.id,
-          amount: 50.0,
           type: "transfer",
           timestamp: DateTime.utc_now()|> DateTime.truncate(:second),
         })
